@@ -2,4 +2,5 @@
 !.git
 !.gitignore
 !*.ipynb
-!.\keep
+!/keep
+!/scripts
