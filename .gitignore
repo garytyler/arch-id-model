@@ -2,9 +2,7 @@
 !.git
 !.gitignore
 !*.ipynb
-!/keep
-!/keep/*.ipynb
 !/scripts
 !/scripts/*
-!/training
-!/training/*.ipynb
+!/notebooks
+!/notebooks/*
