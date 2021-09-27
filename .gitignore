@@ -3,7 +3,7 @@
 !.gitignore
 !*.ipynb
 !/keep
-!/keep/*
+!/keep/*.ipynb
 !/scripts
 !/scripts/*
 !/training
