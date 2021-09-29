@@ -133,26 +133,26 @@ def create_model():
 # In[8]:
 
 
-with tf.device("/device:gpu:2"):
-    model = restore_weights(create_model())
+model = restore_weights(create_model())
 
-    # Train
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=80,
-        callbacks=[
-            tf.keras.callbacks.ModelCheckpoint(
-                filepath=str(CHECKPOINT_PATH),
-                verbose=1,
-                save_weights_only=True,
-                save_freq=BATCH_SIZE * 30,
-            ),
-            tf.keras.callbacks.EarlyStopping(
-                min_delta=0.0001, patience=10, restore_best_weights=True
-            ),
-        ],
-    )
+# Train
+tf.debugging.set_log_device_placement(True)
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=80,
+    callbacks=[
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=str(CHECKPOINT_PATH),
+            verbose=1,
+            save_weights_only=True,
+            save_freq=BATCH_SIZE * 30,
+        ),
+        tf.keras.callbacks.EarlyStopping(
+            min_delta=0.0001, patience=10, restore_best_weights=True
+        ),
+    ],
+)
 
 
 # In[ ]:
