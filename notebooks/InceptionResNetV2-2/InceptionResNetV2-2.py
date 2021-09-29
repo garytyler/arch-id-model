@@ -75,7 +75,7 @@ test_ds.map(lambda i, _: tf.keras.applications.inception_resnet_v2.preprocess_in
 
 train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
 val_ds = val_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
-test_ds = val_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
+test_ds = val_ds.cache().pshuffle(1000).refetch(buffer_size=tf.data.AUTOTUNE)
 
 
 # In[40]:
