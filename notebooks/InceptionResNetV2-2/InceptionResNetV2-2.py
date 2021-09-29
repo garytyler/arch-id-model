@@ -24,8 +24,8 @@ from pathlib import Path
 # In[37]:
 
 
-BATCH_SIZE = 16
-IMG_HEIGHT, IMG_WIDTH = (299, 299)
+BATCH_SIZE = 8
+IMG_HEIGHT, IMG_WIDTH = (256, 256)
 PREPROCESS_SEED = 123
 CHECKPOINT_DIR = Path("checkpoints")
 CHECKPOINT_PATH = CHECKPOINT_DIR / "cp-{epoch:04d}.ckpt"
@@ -115,7 +115,7 @@ def create_model():
             tf.keras.layers.GlobalAveragePooling2D(),
             tf.keras.layers.Dropout(0.1),
             tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(512, activation="relu"),
+            tf.keras.layers.Dense(128, activation="relu"),
             tf.keras.layers.Dense(
                 len(class_names), activation="softmax", name="predictions"
             ),
@@ -132,26 +132,28 @@ def create_model():
 # In[42]:
 
 
-with tf.device("/device:gpu:1"):
-    model = restore_weights(create_model())
 
-    # Train
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=80,
-        callbacks=[
-            tf.keras.callbacks.ModelCheckpoint(
-                filepath=str(CHECKPOINT_PATH),
-                verbose=1,
-                save_weights_only=True,
-                save_freq=BATCH_SIZE * 30,
-            ),
-            tf.keras.callbacks.EarlyStopping(
-                min_delta=0.0001, patience=10, restore_best_weights=True
-            ),
-        ],
-    )
+model = restore_weights(create_model())
+
+
+# Train
+tf.debugging.set_log_device_placement(True)
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=80,
+    callbacks=[
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=str(CHECKPOINT_PATH),
+            verbose=1,
+            save_weights_only=True,
+            save_freq=BATCH_SIZE * 30,
+        ),
+        tf.keras.callbacks.EarlyStopping(
+            min_delta=0.0001, patience=10, restore_best_weights=True
+        ),
+    ],
+)
 
 
 # In[ ]:
@@ -193,7 +195,6 @@ model.save("model-InceptionResNetV2-2")
 model.save("model-InceptionResNetV2-2.h5")
 
 # In[ ]:
-
 
 import random
 

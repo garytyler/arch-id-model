@@ -8,3 +8,9 @@
 !/notebooks/*
 !/notebooks/**/*.ipynb
 !/notebooks/**/*.py
+!docker-compose*yml
+!Dockerfile
+!.devcontainer
+!.devcontainer/*
+!pyproject.toml
+!.flake8
