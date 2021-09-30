@@ -16,9 +16,8 @@ RUN apt-get update \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
+# Set lower ulimit
 RUN ulimit -n 4092
-
-RUN chown $USERNAME:$USERNAME /.config/matplotlip
 
 # Set as non-root user
 USER $USERNAME

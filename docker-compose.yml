@@ -1,16 +1,16 @@
 version: "3"
 services:
-  train:
+  training:
     build:
       context: .
       args:
-        - USERNAME=${USER}
+        - "USERNAME=${USER}"
     runtime: nvidia
     environment:
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - CUDA_DEVICE_ORDER=PCI_BUS_ID
-      - NVIDIA_VISIBLE_DEVICES=${GPUS}
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - "TF_FORCE_GPU_ALLOW_GROWTH=true"
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "NVIDIA_VISIBLE_DEVICES=${GPUS}"
+      - "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
     working_dir: /workspace
     volumes:
       - .:/workspace:rw

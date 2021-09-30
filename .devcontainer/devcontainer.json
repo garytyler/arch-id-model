@@ -2,7 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.194.3/containers/docker-existing-docker-compose
 {
 	"dockerComposeFile": [
-		"..docker-compose.dev.yml"
+		"../docker-compose.dev.yml"
 	],
 	"service": "devcontainer",
 	"workspaceFolder": "/workspace",

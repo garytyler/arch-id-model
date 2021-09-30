@@ -8,5 +8,5 @@ services:
     runtime: nvidia
     command: /bin/sh -c "while sleep 1000; do :; done"
     volumes:
-      - ..:/workspace:rw
-      - /var/run/docker.sock:/var/run/docker.sockee
+      - .:/workspace:rw
+      - /var/run/docker.sock:/var/run/docker.sock
