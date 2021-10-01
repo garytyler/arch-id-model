@@ -15,6 +15,9 @@
 		"terminal.integrated.defaultProfile.linux": "bash",
 		"python.formatting.blackPath": "black"
 	},
+	"extensions": [
+		"ms-toolsai.jupyter",
+	]
 	// Uncomment the next line to run commands after the container is created.
 	// "postCreateCommand": "bash .devcontainer/script.sh",
 }

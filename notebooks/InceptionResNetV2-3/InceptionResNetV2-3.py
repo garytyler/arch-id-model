@@ -75,7 +75,7 @@ test_ds.map(lambda i, _: tf.keras.applications.inception_resnet_v2.preprocess_in
 
 train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
 val_ds = val_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
-test_ds = val_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
+test_ds = _ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
 
 
 # In[40]:
@@ -146,9 +146,6 @@ with strategy.scope():
                 verbose=1,
                 save_weights_only=True,
                 save_freq=BATCH_SIZE * 100,
-            ),
-            tf.keras.callbacks.EarlyStopping(
-                min_delta=0.0001, patience=10, restore_best_weights=True
             ),
         ],
     )
