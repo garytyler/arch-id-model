@@ -17,4 +17,4 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace:rw
-    command: bash -c "ulimit -n 4092 && cd notebooks/${NB} && python ${NB}.py"
+    command: bash -c "ulimit -n 4092 && cd notebooks/${NB} && jupyter nbconvert --to notebook --execute ${NB}.ipynb"

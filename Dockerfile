@@ -16,18 +16,21 @@ RUN apt-get update \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
+# Upgrade pip and install project dependencies from pip
+RUN pip install --upgrade pip sklearn
+
 # Set as non-root user
 USER $USERNAME
 
 FROM train-stage AS dev-stage
 
-# Add dev dependencies
+# Install development dependencies from apt
 USER root
 RUN apt-get update \
     && apt-get install direnv
 
-# Upgrade pip and install python project dependencies
-RUN pip install --upgrade pip sklearn black isort flake8 mypy
+# Install development dependencies from pip
+RUN pip install black isort flake8 mypy
 
 # Set as non-root user
 USER $USERNAME
