@@ -16,8 +16,18 @@ RUN apt-get update \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
-# Set lower ulimit
-RUN ulimit -n 4092
+# Set as non-root user
+USER $USERNAME
+
+FROM train-stage AS dev-stage
+
+# Add dev dependencies
+USER root
+RUN apt-get update \
+    && apt-get install direnv
+
+# Upgrade pip and install python project dependencies
+RUN pip install --upgrade pip sklearn black isort flake8 mypy
 
 # Set as non-root user
 USER $USERNAME

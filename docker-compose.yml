@@ -3,8 +3,11 @@ services:
   training:
     build:
       context: .
+      target: train-stage
       args:
         - "USERNAME=${USER}"
+    ports:
+      - 6006:6006
     runtime: nvidia
     environment:
       - "TF_FORCE_GPU_ALLOW_GROWTH=true"
@@ -14,4 +17,4 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace:rw
-    command: bash -c "cd notebooks/${NB} && python ${NB}.py"
+    command: bash -c "ulimit -n 4092 && cd notebooks/${NB} && python ${NB}.py"
