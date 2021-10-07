@@ -2,22 +2,26 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.194.3/containers/docker-existing-docker-compose
 {
 	"dockerComposeFile": [
-		"../docker-compose.dev.yml"
+		"../docker-compose.dev.yml",
+		"./docker-compose.vscode.yml",
 	],
 	"service": "devcontainer",
-	"workspaceFolder": "/workspace",
 	"settings": {
 		"terminal.integrated.profiles.linux": {
 			"bash": {
-				"path": "/bin/bash"
-			}
+				"path": "/bin/bash",
+				"args": [
+					"--login"
+				]
+			},
 		},
 		"terminal.integrated.defaultProfile.linux": "bash",
 		"python.formatting.blackPath": "black"
 	},
 	"extensions": [
 		"ms-toolsai.jupyter",
-	]
-	// Uncomment the next line to run commands after the container is created.
-	// "postCreateCommand": "bash .devcontainer/script.sh",
+	],
+	"workspaceFolder": "/workspace",
+	"postCreateCommand": "sudo chown 1000 /workspace",
+	"postAttachCommand": "/bin/bash -c 'source ~/.profile",
 }

@@ -11,4 +11,8 @@ services:
     runtime: nvidia
     command: /bin/sh -c "while sleep 1000; do :; done"
     volumes:
+      - workspace:/workspace
       - .:/workspace:rw
+
+volumes:
+  workspace:
