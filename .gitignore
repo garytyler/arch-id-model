@@ -16,3 +16,4 @@
 !pyproject.toml
 !.flake8
 !.dockerignore
+!install-docker.sh
