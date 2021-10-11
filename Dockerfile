@@ -24,13 +24,23 @@ USER $USERNAME
 
 FROM train-stage AS dev-stage
 
+# Set as non-root user
+USER $USERNAME
+
+WORKDIR /workspace/
+
+# Install docker
+COPY --chown=$USERNAME:$USERNAME /install-docker.sh ./
+RUN chmod u+x ./install-docker.sh
+RUN /bin/bash -c './install-docker.sh'
+
 # Install development dependencies from apt
 USER root
 RUN apt-get update \
     && apt-get install direnv
 
 # Install development dependencies from pip
-RUN pip install black isort flake8 mypy
+RUN pip install black isort flake8 mypy docker
 
 # Set as non-root user
 USER $USERNAME
