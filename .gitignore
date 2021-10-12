@@ -17,3 +17,6 @@
 !.flake8
 !.dockerignore
 !install-docker.sh
+!/arch_recognizer
+!/arch_recognizer/*
+!/arch_recognizer/**/*.py

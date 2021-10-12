@@ -20,6 +20,7 @@
 	},
 	"extensions": [
 		"ms-toolsai.jupyter",
+		"ms-azuretools.vscode-docker"
 	],
 	"workspaceFolder": "/workspace",
 	"postCreateCommand": "sudo chown 1000 /workspace",

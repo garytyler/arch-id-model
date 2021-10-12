@@ -8,8 +8,13 @@ services:
       args:
         - USERNAME=${USER}
     ports:
-      - 6006:6006
+      - 6007:6007
     runtime: nvidia
+    environment:
+      - "TF_FORCE_GPU_ALLOW_GROWTH=true"
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "NVIDIA_VISIBLE_DEVICES=${GPUS}"
+      - "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
     command: /bin/sh -c "while sleep 1000; do :; done"
     volumes:
       - workspace:/workspace
