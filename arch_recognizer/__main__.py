@@ -77,6 +77,11 @@ def get_dataset(split, image_size, batch_size, pad_to_aspect_ratio=False):
 def execute_run(hparams, run_name):
     cnn_app = CNN_APPS[hparams[HP_CNN_MODEL]]
 
+    class_names = [
+        DATASET_BUILDER.info.features["label"].int2str(n)
+        for n in range(DATASET_BUILDER.info.features["label"].num_classes)
+    ]
+
     train_ds = get_dataset(
         split="train",
         image_size=cnn_app["image_size"],
@@ -93,20 +98,17 @@ def execute_run(hparams, run_name):
         batch_size=cnn_app["batch_size"],
     )
 
-    class_names = [
-        DATASET_BUILDER.info.features["label"].int2str(n)
-        for n in range(DATASET_BUILDER.info.features["label"].num_classes)
-    ]
+    train_ds.map(lambda img, _: cnn_app["preprocessor"](img))
+    val_ds.map(lambda img, _: cnn_app["preprocessor"](img))
+    test_ds.map(lambda img, _: cnn_app["preprocessor"](img))
 
-    train_ds = train_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-    val_ds = val_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-    test_ds = test_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-
-    train_ds = train_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
-    val_ds = val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
-    test_ds = test_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    train_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    test_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
     def restore_weights_from_checkpoint(model):
+        if not CHECKPOINTS_DIR.exists():
+            return model
         latest_cp = tf.train.latest_checkpoint(CHECKPOINTS_DIR)
         if latest_cp:
             model.load_weights(latest_cp)
