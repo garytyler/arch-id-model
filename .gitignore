@@ -4,11 +4,6 @@
 !*.ipynb
 !/scripts
 !/scripts/*
-!/notebooks
-!/notebooks/*
-!/notebooks/**/*.ipynb
-!/notebooks/**/*.py
-!/notebooks/**/*.jpg
 !docker-compose*yml
 !Dockerfile
 !.devcontainer
@@ -18,5 +13,5 @@
 !.dockerignore
 !install-docker.sh
 !/arch_recognizer
-!/arch_recognizer/*
+!/arch_recognizer/*.py
 !/arch_recognizer/**/*.py

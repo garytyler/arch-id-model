@@ -12,11 +12,15 @@ from utils import plot_confusion_matrix, plot_to_image
 
 MODULE_BASE_DIR = Path(__file__).parent
 REPO_DIR = MODULE_BASE_DIR.parent
-CHECKPOINTS_DIR = REPO_DIR / "checkpoints"
-LOGS_DIR = REPO_DIR / "logs"
+OUTPUT_DIR = REPO_DIR / "output"
+
+CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
+LOGS_DIR = OUTPUT_DIR / "logs"
 
 BASE_DATA_DIR = Path(REPO_DIR, "input", "arch-recognizer-dataset").absolute()
 DATASET_BUILDER = tfds.ImageFolder(BASE_DATA_DIR)
+
+PREPROCESS_SEED = 123456
 
 HP_CNN_MODEL = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
 HP_WEIGHTS = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
@@ -26,7 +30,8 @@ HP_CROP_TO_ASPECT_RATIO = hp.HParam(
 HP_LEARNING_RATE = hp.HParam(
     # "learning_rate", hp.Discrete([float(1e-4), float(3e-4), float(5e-4)])
     "learning_rate",
-    hp.Discrete([float(5e-4)]),
+    hp.Discrete([float(1e-4), float(5e-4)])
+    # "learning_rate",hp.Discrete([float(5e-4)])
 )
 
 METRIC_TEST_ACCURACY = "accuracy"
@@ -38,21 +43,35 @@ with tf.summary.create_file_writer(str(LOGS_DIR / "hparam_tuning")).as_default()
     )
 
 
-def get_dataset(split, image_size, batch_size):
-    return (
-        DATASET_BUILDER.as_dataset(
-            split=split, shuffle_files=True, batch_size=batch_size
+def get_dataset(split, image_size, batch_size, pad_to_aspect_ratio=False):
+    if pad_to_aspect_ratio:
+        _options = tf.data.Options()
+        _options.experimental_distribute.auto_shard_policy = (
+            tf.data.experimental.AutoShardPolicy.DATA
         )
-        .map(
-            lambda tensor: (
-                tf.image.resize_with_pad(tensor["image"], *image_size),
-                tensor["label"],
+        return (
+            DATASET_BUILDER.as_dataset(
+                split=split, shuffle_files=True, batch_size=batch_size
+            )
+            .with_options(_options)
+            .map(
+                lambda tensor: (
+                    tf.image.resize_with_pad(tensor["image"], *image_size),
+                    tensor["label"],
+                )
             )
         )
-        .take(batch_size)
-        .cache()
-        .prefetch(buffer_size=tf.data.AUTOTUNE)
-    )
+    else:
+        return tf.keras.preprocessing.image_dataset_from_directory(
+            str(BASE_DATA_DIR / split),
+            labels="inferred",
+            label_mode="int",
+            seed=PREPROCESS_SEED,
+            image_size=image_size,
+            batch_size=batch_size,
+            shuffle=True,
+            crop_to_aspect_ratio=False,
+        )
 
 
 def execute_run(hparams, run_name):
@@ -79,9 +98,13 @@ def execute_run(hparams, run_name):
         for n in range(DATASET_BUILDER.info.features["label"].num_classes)
     ]
 
-    train_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-    val_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-    test_ds.map(lambda img, _: cnn_app["preprocessor"](img))
+    train_ds = train_ds.map(lambda img, _: cnn_app["preprocessor"](img))
+    val_ds = val_ds.map(lambda img, _: cnn_app["preprocessor"](img))
+    test_ds = test_ds.map(lambda img, _: cnn_app["preprocessor"](img))
+
+    train_ds = train_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    val_ds = val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    test_ds = test_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
     def restore_weights_from_checkpoint(model):
         latest_cp = tf.train.latest_checkpoint(CHECKPOINTS_DIR)
@@ -121,7 +144,7 @@ def execute_run(hparams, run_name):
     )
 
     # Defining a file writer for confusion matrix logging
-    cm_file_writer = tf.summary.create_file_writer(str(LOGS_DIR / "cm"))
+    cm_file_writer = tf.summary.create_file_writer(str(LOGS_DIR / run_name / "cm"))
 
     def log_confusion_matrix(epoch, logs):
         pred_y, true_y = [], []
@@ -137,8 +160,7 @@ def execute_run(hparams, run_name):
     model.fit(
         train_ds,
         validation_data=val_ds,
-        # epochs=100,
-        epochs=1,
+        epochs=100,
         callbacks=[
             tf.keras.callbacks.TensorBoard(
                 log_dir=LOGS_DIR / run_name, histogram_freq=1, profile_batch=0
@@ -165,15 +187,7 @@ def execute_run(hparams, run_name):
 
 def launch_tensorboard(logs_dir):
     tb = tensorboard.program.TensorBoard()
-    tb.configure(
-        argv=[
-            None,
-            f"--logdir={logs_dir}",
-            f"--reload_interval={10}",
-            "--bind_all",
-            "--load_fast=false",
-        ]
-    )
+    tb.configure(argv=[None, f"--logdir={logs_dir}", "--bind_all"])
     url = tb.launch()
     print(f"Tensorflow listening on {url}")
 
@@ -190,7 +204,12 @@ def main():
                     HP_WEIGHTS: weights,
                     HP_LEARNING_RATE: learning_rate,
                 }
-                run_name = f"run-{run_num}-{cnn_model}-{weights}-{learning_rate}"
+                run_name = (
+                    f"run-{run_num}"
+                    f"-{cnn_model}"
+                    f"-{weights if weights else 'none'}"
+                    f"-{learning_rate}"
+                )
                 run_logs_dir = LOGS_DIR / run_name
                 run_logs_file_writer = tf.summary.create_file_writer(
                     logdir=str(run_logs_dir)
@@ -204,7 +223,6 @@ def main():
                     try:
                         with run_logs_file_writer.as_default():
                             hp.hparams(hparams)  # record the values used in this run
-
                             gpus = tf.config.list_logical_devices("GPU")
                             with tf.distribute.MirroredStrategy(gpus).scope():
                                 test_accuracy = execute_run(hparams, run_name)
