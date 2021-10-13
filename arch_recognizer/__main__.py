@@ -1,3 +1,6 @@
+import operator
+import os
+from functools import reduce
 from pathlib import Path
 
 import numpy as np
@@ -8,20 +11,37 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 from cnn import CNN_APPS
 from tensorboard.plugins.hparams import api as hp
-from utils import plot_confusion_matrix, plot_to_image
+from utils import generate_splits, plot_confusion_matrix, plot_to_image
 
-MODULE_BASE_DIR = Path(__file__).parent
+PREPROCESS_SEED = 123456
+
+MODULE_BASE_DIR = Path(__file__).parent.absolute()
 REPO_DIR = MODULE_BASE_DIR.parent
 OUTPUT_DIR = REPO_DIR / "output"
 
 CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
 LOGS_DIR = OUTPUT_DIR / "logs"
 
-BASE_DATA_DIR = Path(REPO_DIR, "input", "arch-recognizer-dataset").absolute()
-DATASET_BUILDER = tfds.ImageFolder(BASE_DATA_DIR)
 
-PREPROCESS_SEED = 123456
+# Generate Dataset Splits
+DATASET_SOURCE_DIR = Path(str(os.getenv("DATASET_SOURCE_DIR"))).absolute()
+DATASET_TOTAL_COUNT = reduce(
+    operator.add,
+    (len(list(d.iterdir())) for d in DATASET_SOURCE_DIR.iterdir()),
+)
+DATASET_SPLIT_DIR = generate_splits(
+    src_dir=DATASET_SOURCE_DIR,
+    dst_dir=Path(REPO_DIR, "input").absolute(),
+    seed=PREPROCESS_SEED,
+)
+DATASET_BUILDER = tfds.ImageFolder(DATASET_SPLIT_DIR)
+CLASS_NAMES = [
+    DATASET_BUILDER.info.features["label"].int2str(n)
+    for n in range(DATASET_BUILDER.info.features["label"].num_classes)
+]
 
+
+# Prepare hyperparameters
 HP_CNN_MODEL = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
 HP_WEIGHTS = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
 HP_CROP_TO_ASPECT_RATIO = hp.HParam(
@@ -43,40 +63,7 @@ with tf.summary.create_file_writer(str(LOGS_DIR / "hparam_tuning")).as_default()
     )
 
 
-def get_dataset(split, image_size, batch_size, pad_to_aspect_ratio=False):
-    _options = tf.data.Options()
-    _options.experimental_distribute.auto_shard_policy = (
-        tf.data.experimental.AutoShardPolicy.DATA
-    )
-    _options.threading.max_intra_op_parallelism = 1
-    if pad_to_aspect_ratio:
-
-        return (
-            DATASET_BUILDER.as_dataset(split=split, batch_size=batch_size)
-            .with_options(_options)
-            .map(
-                lambda tensor: (
-                    tf.image.resize_with_pad(tensor["image"], *image_size),
-                    tensor["label"],
-                )
-            )
-        )
-    else:
-        return DATASET_BUILDER.as_dataset(
-            split=split, batch_size=batch_size
-        ).with_options(_options)
-        # return tf.keras.preprocessing.image_dataset_from_directory(
-        #     str(BASE_DATA_DIR / split),
-        #     labels="inferred",
-        #     label_mode="int",
-        #     seed=PREPROCESS_SEED,
-        #     image_size=image_size,
-        #     batch_size=batch_size,
-        #     shuffle=False,
-        #     crop_to_aspect_ratio=False,
-        # ).with_options(_options)
-
-
+# Define training run function
 def execute_run(hparams, run_name):
     cnn_app = CNN_APPS[hparams[HP_CNN_MODEL]]
 
@@ -101,7 +88,7 @@ def execute_run(hparams, run_name):
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
             .shuffle(
-                buffer_size=14000,
+                buffer_size=DATASET_TOTAL_COUNT,
                 seed=PREPROCESS_SEED,
                 reshuffle_each_iteration=True,
             )
@@ -110,11 +97,6 @@ def execute_run(hparams, run_name):
     train_ds = get_dataset("train")
     val_ds = get_dataset("val")
     test_ds = get_dataset("test")
-
-    class_names = [
-        DATASET_BUILDER.info.features["label"].int2str(n)
-        for n in range(DATASET_BUILDER.info.features["label"].num_classes)
-    ]
 
     def restore_weights_from_checkpoint(model):
         if not CHECKPOINTS_DIR.exists():
@@ -132,7 +114,7 @@ def execute_run(hparams, run_name):
             weights=hparams[HP_WEIGHTS] if hparams[HP_WEIGHTS] else None,
         )
         if hparams[HP_WEIGHTS] != "imagenet":
-            kwargs["classes"] = len(class_names)
+            kwargs["classes"] = len(CLASS_NAMES)
         return CNN_APPS[hparams[HP_CNN_MODEL]]["class"](**kwargs)
 
     gpus = tf.config.list_logical_devices("GPU")
@@ -167,7 +149,7 @@ def execute_run(hparams, run_name):
             true_y.extend(batch_y)
             pred_y.extend(np.argmax(model.predict(batch_X), axis=-1))
         cm_data = np.nan_to_num(sklearn.metrics.confusion_matrix(true_y, pred_y))
-        cm_figure = plot_confusion_matrix(cm_data, class_names=class_names)
+        cm_figure = plot_confusion_matrix(cm_data, class_names=CLASS_NAMES)
         cm_image = plot_to_image(cm_figure)
         with cm_file_writer.as_default():
             tf.summary.image("Confusion Matrix", cm_image, step=epoch)
@@ -180,9 +162,10 @@ def execute_run(hparams, run_name):
             tf.keras.callbacks.TensorBoard(
                 log_dir=LOGS_DIR / run_name,
                 histogram_freq=1,
+                profile_batch=0,
+                # profile_batch=(10, 20),
                 # write_graph=True,
                 # write_images=True,
-                # profile_batch=(10, 20),
             ),
             tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix),
             tf.keras.callbacks.ModelCheckpoint(
@@ -196,7 +179,7 @@ def execute_run(hparams, run_name):
             ),
             tf.keras.callbacks.EarlyStopping(
                 min_delta=0.0001,
-                patience=4,
+                patience=12,
                 restore_best_weights=True,
             ),
         ],
@@ -213,9 +196,7 @@ def launch_tensorboard(logs_dir):
     print(f"Tensorflow listening on {url}")
 
 
-def main():
-    launch_tensorboard(LOGS_DIR)
-
+def train_all():
     run_num = 0
     for cnn_model in HP_CNN_MODEL.domain.values:
         for weights in HP_WEIGHTS.domain.values:
@@ -254,6 +235,12 @@ def main():
                         with open(run_completed_file_path, "w") as f:
                             f.write(f"Test Accuracy: {test_accuracy}")
                 run_num += 1
+
+
+def main():
+
+    launch_tensorboard(LOGS_DIR)
+    train_all()
 
 
 if __name__ == "__main__":

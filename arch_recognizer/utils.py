@@ -1,7 +1,12 @@
 import io
 import itertools
+import os
+import random
+import shutil
+from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy
 import numpy as np
 import tensorflow as tf
 
@@ -52,3 +57,85 @@ def plot_confusion_matrix(cm, class_names):
     plt.ylabel("True label")
     plt.xlabel("Predicted label")
     return figure
+
+
+def generate_splits(
+    src_dir: Path,
+    dst_dir: Path,
+    seed: int,
+    val_ratio: float = 0.15,
+    test_ratio: float = 0.15,
+    quantity_multiplier: float = 1.0,
+) -> Path:
+    rng = numpy.random.default_rng(seed=seed)
+
+    val_dir = dst_dir.absolute() / "val"
+    test_dir = dst_dir.absolute() / "test"
+    train_dir = dst_dir.absolute() / "train"
+
+    # Remove old
+    shutil.rmtree(val_dir, ignore_errors=True)
+    shutil.rmtree(test_dir, ignore_errors=True)
+    shutil.rmtree(train_dir, ignore_errors=True)
+
+    # Generate new
+    for src_class_dir in src_dir.iterdir():
+        src_class_files = list(src_class_dir.iterdir())
+        src_class_num = round(len(src_class_files) * quantity_multiplier)
+
+        # Shuffle files
+        random.shuffle(src_class_files, random=rng.random)
+
+        # Set counts
+        val_num = round(src_class_num * val_ratio)
+        test_num = round(src_class_num * test_ratio)
+        train_num = src_class_num - val_num - test_num
+
+        # Create lists
+        val_files = []
+        for n in range(val_num):
+            val_files.append(src_class_files.pop().name)
+
+        test_files = []
+        for n in range(test_num):
+            test_files.append(src_class_files.pop().name)
+
+        train_files = []
+        for n in range(train_num):
+            train_files.append(src_class_files.pop().name)
+
+        if not all(
+            (
+                set(test_files).isdisjoint(set(train_files)),
+                set(test_files).isdisjoint(set(val_files)),
+                set(train_files).isdisjoint(set(val_files)),
+                src_class_num == len(test_files) + len(val_files) + len(train_files),
+            )
+        ):
+            raise RuntimeError("Error generating dataset splits: wrong resulting count")
+
+        # Copy val files
+        val_class_dir = val_dir / src_class_dir.name
+        os.makedirs(val_class_dir)
+        for file_name in val_files:
+            src = src_class_dir / file_name
+            dst = val_class_dir / file_name
+            shutil.copyfile(src, dst)
+
+        # Copy test files
+        test_class_dir = test_dir / src_class_dir.name
+        os.makedirs(test_class_dir)
+        for file_name in test_files:
+            src = src_class_dir / file_name
+            dst = test_class_dir / file_name
+            shutil.copyfile(src, dst)
+
+        # Copy train files
+        train_class_dir = train_dir / src_class_dir.name
+        os.makedirs(train_class_dir)
+        for file_name in train_files:
+            src = src_class_dir / file_name
+            dst = train_class_dir / file_name
+            shutil.copyfile(src, dst)
+
+    return dst_dir
