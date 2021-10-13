@@ -1,9 +1,11 @@
+import filecmp
 import io
 import itertools
 import os
 import random
 import shutil
 from pathlib import Path
+from typing import Callable, Dict, Tuple
 
 import matplotlib.pyplot as plt
 import numpy
@@ -59,83 +61,52 @@ def plot_confusion_matrix(cm, class_names):
     return figure
 
 
-def generate_splits(
+def generate_dataset_splits(
     src_dir: Path,
     dst_dir: Path,
     seed: int,
-    val_ratio: float = 0.15,
-    test_ratio: float = 0.15,
+    ratios: Dict[str, float] = {"val": 0.15, "test": 0.15},
     quantity_multiplier: float = 1.0,
 ) -> Path:
     rng = numpy.random.default_rng(seed=seed)
-
-    val_dir = dst_dir.absolute() / "val"
-    test_dir = dst_dir.absolute() / "test"
-    train_dir = dst_dir.absolute() / "train"
-
-    # Remove old
-    shutil.rmtree(val_dir, ignore_errors=True)
-    shutil.rmtree(test_dir, ignore_errors=True)
-    shutil.rmtree(train_dir, ignore_errors=True)
+    dst_files: dict = {"train": dict()}
+    dst_files.update({k: {} for k in ratios})
 
     # Generate new
     for src_class_dir in src_dir.iterdir():
         src_class_files = list(src_class_dir.iterdir())
-        src_class_num = round(len(src_class_files) * quantity_multiplier)
+        src_class_count = round(len(src_class_files) * quantity_multiplier)
 
         # Shuffle files
         random.shuffle(src_class_files, random=rng.random)
 
         # Set counts
-        val_num = round(src_class_num * val_ratio)
-        test_num = round(src_class_num * test_ratio)
-        train_num = src_class_num - val_num - test_num
+        counts = {k: round(src_class_count * v) for k, v in ratios.items()}
+        counts["train"] = src_class_count - sum(counts.values())
 
-        # Create lists
-        val_files = []
-        for n in range(val_num):
-            val_files.append(src_class_files.pop().name)
+        # Sort into lists
+        for split_name in dst_files:
+            dst_files[split_name][src_class_dir.name] = [
+                src_class_files.pop().name for _ in range(counts[split_name])
+            ]
 
-        test_files = []
-        for n in range(test_num):
-            test_files.append(src_class_files.pop().name)
-
-        train_files = []
-        for n in range(train_num):
-            train_files.append(src_class_files.pop().name)
-
-        if not all(
-            (
-                set(test_files).isdisjoint(set(train_files)),
-                set(test_files).isdisjoint(set(val_files)),
-                set(train_files).isdisjoint(set(val_files)),
-                src_class_num == len(test_files) + len(val_files) + len(train_files),
-            )
-        ):
-            raise RuntimeError("Error generating dataset splits: wrong resulting count")
-
-        # Copy val files
-        val_class_dir = val_dir / src_class_dir.name
-        os.makedirs(val_class_dir)
-        for file_name in val_files:
-            src = src_class_dir / file_name
-            dst = val_class_dir / file_name
-            shutil.copyfile(src, dst)
-
-        # Copy test files
-        test_class_dir = test_dir / src_class_dir.name
-        os.makedirs(test_class_dir)
-        for file_name in test_files:
-            src = src_class_dir / file_name
-            dst = test_class_dir / file_name
-            shutil.copyfile(src, dst)
-
-        # Copy train files
-        train_class_dir = train_dir / src_class_dir.name
-        os.makedirs(train_class_dir)
-        for file_name in train_files:
-            src = src_class_dir / file_name
-            dst = train_class_dir / file_name
-            shutil.copyfile(src, dst)
+    for split_name, classes in dst_files.items():
+        for class_name, file_names in classes.items():
+            dst_handled_paths = set()
+            os.makedirs(dst_dir / split_name / class_name, exist_ok=True)
+            # Copy files only if missing or if name and hash don't match
+            for file_name in file_names:
+                dst = dst_dir / split_name / class_name / file_name
+                src = src_dir / class_name / file_name
+                if not dst.exists():
+                    shutil.copyfile(src, dst)
+                elif not filecmp.cmp(dst, src):
+                    os.remove(dst)
+                    shutil.copyfile(src, dst)
+                dst_handled_paths.add(dst)
+            # Remove extra files in the destination directory
+            dst_existing_paths = set(Path(dst_dir / split_name / class_name).iterdir())
+            for unhandled_path in dst_existing_paths.difference(dst_handled_paths):
+                os.remove(unhandled_path)
 
     return dst_dir
