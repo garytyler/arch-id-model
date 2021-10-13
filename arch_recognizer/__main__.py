@@ -18,13 +18,17 @@ PREPROCESS_SEED = 123456
 MODULE_BASE_DIR = Path(__file__).parent.absolute()
 REPO_DIR = MODULE_BASE_DIR.parent
 OUTPUT_DIR = REPO_DIR / "output"
-
 CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
 LOGS_DIR = OUTPUT_DIR / "logs"
 
 
 # Generate Dataset Splits
-DATASET_SOURCE_DIR = Path(str(os.getenv("DATASET_SOURCE_DIR"))).absolute()
+DATASET_SOURCE_DIR = Path(REPO_DIR / "dataset")
+if not DATASET_SOURCE_DIR.exists() or not list(DATASET_SOURCE_DIR.iterdir()):
+    raise EnvironmentError(
+        "If running module directly, add source dataset to ./dataset "
+        "with structure root/classes/images"
+    )
 DATASET_TOTAL_COUNT = reduce(
     operator.add,
     (len(list(d.iterdir())) for d in DATASET_SOURCE_DIR.iterdir()),
@@ -51,7 +55,7 @@ HP_LEARNING_RATE = hp.HParam(
     "learning_rate",
     # hp.Discrete([float(1e-4), float(3e-4), float(5e-4)]),
     # hp.Discrete([float(1e-4), float(5e-4)]),
-    hp.Discrete([float(1e-4)]),
+    hp.Discrete([float(1e-4), float(5e-05)]),
 )
 
 METRIC_TEST_ACCURACY = "accuracy"
