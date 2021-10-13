@@ -19,7 +19,11 @@ RUN apt-get update \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
 # Upgrade pip and install project dependencies from pip
-RUN pip install --upgrade pip sklearn tensorflow_datasets
+RUN pip install --upgrade pip
+RUN pip install -U \
+    sklearn \
+    tensorflow-datasets \
+    tensorboard-plugin-profile
 
 # Set as non-root user
 USER $USERNAME
@@ -49,7 +53,12 @@ RUN apt-get update \
     && apt-get install direnv
 
 # Install development dependencies from pip
-RUN pip install black isort flake8 mypy docker
+RUN pip install -U \
+    black \
+    isort \
+    flake8 \
+    mypy \
+    docker
 
 # Set as non-root user
 USER $USERNAME

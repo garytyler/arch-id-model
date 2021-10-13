@@ -28,10 +28,10 @@ HP_CROP_TO_ASPECT_RATIO = hp.HParam(
     "crop_to_aspect_ratio", hp.Discrete(["", "imagenet"])
 )
 HP_LEARNING_RATE = hp.HParam(
-    # "learning_rate", hp.Discrete([float(1e-4), float(3e-4), float(5e-4)])
     "learning_rate",
-    hp.Discrete([float(1e-4), float(5e-4)])
-    # "learning_rate",hp.Discrete([float(5e-4)])
+    # hp.Discrete([float(1e-4), float(3e-4), float(5e-4)]),
+    # hp.Discrete([float(1e-4), float(5e-4)]),
+    hp.Discrete([float(1e-4)]),
 )
 
 METRIC_TEST_ACCURACY = "accuracy"
@@ -44,15 +44,15 @@ with tf.summary.create_file_writer(str(LOGS_DIR / "hparam_tuning")).as_default()
 
 
 def get_dataset(split, image_size, batch_size, pad_to_aspect_ratio=False):
+    _options = tf.data.Options()
+    _options.experimental_distribute.auto_shard_policy = (
+        tf.data.experimental.AutoShardPolicy.DATA
+    )
+    _options.threading.max_intra_op_parallelism = 1
     if pad_to_aspect_ratio:
-        _options = tf.data.Options()
-        _options.experimental_distribute.auto_shard_policy = (
-            tf.data.experimental.AutoShardPolicy.DATA
-        )
+
         return (
-            DATASET_BUILDER.as_dataset(
-                split=split, shuffle_files=True, batch_size=batch_size
-            )
+            DATASET_BUILDER.as_dataset(split=split, batch_size=batch_size)
             .with_options(_options)
             .map(
                 lambda tensor: (
@@ -62,49 +62,59 @@ def get_dataset(split, image_size, batch_size, pad_to_aspect_ratio=False):
             )
         )
     else:
-        return tf.keras.preprocessing.image_dataset_from_directory(
-            str(BASE_DATA_DIR / split),
-            labels="inferred",
-            label_mode="int",
-            seed=PREPROCESS_SEED,
-            image_size=image_size,
-            batch_size=batch_size,
-            shuffle=True,
-            crop_to_aspect_ratio=False,
-        )
+        return DATASET_BUILDER.as_dataset(
+            split=split, batch_size=batch_size
+        ).with_options(_options)
+        # return tf.keras.preprocessing.image_dataset_from_directory(
+        #     str(BASE_DATA_DIR / split),
+        #     labels="inferred",
+        #     label_mode="int",
+        #     seed=PREPROCESS_SEED,
+        #     image_size=image_size,
+        #     batch_size=batch_size,
+        #     shuffle=False,
+        #     crop_to_aspect_ratio=False,
+        # ).with_options(_options)
 
 
 def execute_run(hparams, run_name):
     cnn_app = CNN_APPS[hparams[HP_CNN_MODEL]]
 
+    def get_dataset(split):
+        _options = tf.data.Options()
+        _options.experimental_distribute.auto_shard_policy = (
+            tf.data.experimental.AutoShardPolicy.DATA
+        )
+        _options.threading.max_intra_op_parallelism = 1
+        return (
+            DATASET_BUILDER.as_dataset(split=split, batch_size=cnn_app["batch_size"])
+            .with_options(_options)
+            .map(
+                lambda tensor: (
+                    tf.image.resize(tensor["image"], cnn_app["image_size"]),
+                    tensor["label"],
+                )
+            )
+            .map(
+                lambda img, _: (cnn_app["preprocessor"](img), _), num_parallel_calls=16
+            )
+            .cache()
+            .prefetch(buffer_size=tf.data.AUTOTUNE)
+            .shuffle(
+                buffer_size=14000,
+                seed=PREPROCESS_SEED,
+                reshuffle_each_iteration=True,
+            )
+        )
+
+    train_ds = get_dataset("train")
+    val_ds = get_dataset("val")
+    test_ds = get_dataset("test")
+
     class_names = [
         DATASET_BUILDER.info.features["label"].int2str(n)
         for n in range(DATASET_BUILDER.info.features["label"].num_classes)
     ]
-
-    train_ds = get_dataset(
-        split="train",
-        image_size=cnn_app["image_size"],
-        batch_size=cnn_app["batch_size"],
-    )
-    val_ds = get_dataset(
-        split="val",
-        image_size=cnn_app["image_size"],
-        batch_size=cnn_app["batch_size"],
-    )
-    test_ds = get_dataset(
-        split="test",
-        image_size=cnn_app["image_size"],
-        batch_size=cnn_app["batch_size"],
-    )
-
-    train_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-    val_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-    test_ds.map(lambda img, _: cnn_app["preprocessor"](img))
-
-    train_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
-    val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
-    test_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
     def restore_weights_from_checkpoint(model):
         if not CHECKPOINTS_DIR.exists():
@@ -125,25 +135,28 @@ def execute_run(hparams, run_name):
             kwargs["classes"] = len(class_names)
         return CNN_APPS[hparams[HP_CNN_MODEL]]["class"](**kwargs)
 
-    model = restore_weights_from_checkpoint(
-        tf.keras.models.Sequential(
-            [
-                # Augmentation
-                tf.keras.layers.experimental.preprocessing.RandomFlip(
-                    "horizontal", input_shape=(*cnn_app["image_size"], 3)
-                ),
-                tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-                # Convolution
-                get_cnn_model(hparams),
-            ]
-        )
-    )
+    gpus = tf.config.list_logical_devices("GPU")
+    with tf.distribute.MirroredStrategy(gpus).scope():
 
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=hparams[HP_LEARNING_RATE]),
-        loss="sparse_categorical_crossentropy",
-        metrics=[METRIC_TEST_ACCURACY],
-    )
+        model = restore_weights_from_checkpoint(
+            tf.keras.models.Sequential(
+                [
+                    # Augmentation
+                    tf.keras.layers.experimental.preprocessing.RandomFlip(
+                        "horizontal", input_shape=(*cnn_app["image_size"], 3)
+                    ),
+                    tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
+                    # Convolution
+                    get_cnn_model(hparams),
+                ]
+            )
+        )
+
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=hparams[HP_LEARNING_RATE]),
+            loss="sparse_categorical_crossentropy",
+            metrics=[METRIC_TEST_ACCURACY],
+        )
 
     # Defining a file writer for confusion matrix logging
     cm_file_writer = tf.summary.create_file_writer(str(LOGS_DIR / run_name / "cm"))
@@ -165,7 +178,11 @@ def execute_run(hparams, run_name):
         epochs=100,
         callbacks=[
             tf.keras.callbacks.TensorBoard(
-                log_dir=LOGS_DIR / run_name, histogram_freq=1, profile_batch=0
+                log_dir=LOGS_DIR / run_name,
+                histogram_freq=1,
+                # write_graph=True,
+                # write_images=True,
+                # profile_batch=(10, 20),
             ),
             tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix),
             tf.keras.callbacks.ModelCheckpoint(
@@ -178,7 +195,9 @@ def execute_run(hparams, run_name):
                 save_freq="epoch",
             ),
             tf.keras.callbacks.EarlyStopping(
-                min_delta=0.0001, patience=4, restore_best_weights=True
+                min_delta=0.0001,
+                patience=4,
+                restore_best_weights=True,
             ),
         ],
     )
@@ -225,9 +244,7 @@ def main():
                     try:
                         with run_logs_file_writer.as_default():
                             hp.hparams(hparams)  # record the values used in this run
-                            gpus = tf.config.list_logical_devices("GPU")
-                            with tf.distribute.MirroredStrategy(gpus).scope():
-                                test_accuracy = execute_run(hparams, run_name)
+                            test_accuracy = execute_run(hparams, run_name)
                             tf.summary.scalar(
                                 METRIC_TEST_ACCURACY, test_accuracy, step=1
                             )
