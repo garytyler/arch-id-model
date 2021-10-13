@@ -2,6 +2,7 @@ import operator
 import os
 from functools import reduce
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import sklearn
@@ -48,24 +49,20 @@ CLASS_NAMES = [
 # Prepare hyperparameters
 HP_CNN_MODEL = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
 HP_WEIGHTS = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
-HP_CROP_TO_ASPECT_RATIO = hp.HParam(
-    "crop_to_aspect_ratio", hp.Discrete(["", "imagenet"])
-)
+HP_POOLING = hp.HParam("weights", hp.Discrete(["avg", "max"]))
 HP_LEARNING_RATE = hp.HParam(
     "learning_rate",
     # hp.Discrete([float(1e-4), float(3e-4), float(5e-4)]),
-    # hp.Discrete([float(1e-4), float(5e-4)]),
-    hp.Discrete([float(1e-4), float(5e-05)]),
+    hp.Discrete([float(1e-4), float(5e-4)]),
 )
 
-METRIC_TEST_ACCURACY = "accuracy"
+METRIC_ACCURACY = "accuracy"
 
 with tf.summary.create_file_writer(str(LOGS_DIR / "hparam_tuning")).as_default():
     hp.hparams_config(
         hparams=[HP_CNN_MODEL, HP_WEIGHTS, HP_LEARNING_RATE],
-        metrics=[hp.Metric(METRIC_TEST_ACCURACY, display_name="Test Accuracy")],
+        metrics=[hp.Metric(METRIC_ACCURACY, display_name="Test Accuracy")],
     )
-
 
 # Define training run function
 def execute_run(hparams, run_name):
@@ -112,14 +109,40 @@ def execute_run(hparams, run_name):
             print(f"Restored model test accuracy: {restored_test_acc}")
         return model
 
-    def get_cnn_model(hparams):
-        kwargs = dict(
-            include_top=True,
-            weights=hparams[HP_WEIGHTS] if hparams[HP_WEIGHTS] else None,
+    # def get_cnn_model(hparams):
+    #     # kwargs = dict(
+    #     #     include_top=True,
+    #     #     weights=hparams[HP_WEIGHTS] if hparams[HP_WEIGHTS] else None,
+    #     # )
+    #     if hparams[HP_WEIGHTS] != "imagenet":
+    #         kwargs["classes"] = len(CLASS_NAMES)
+    #     return CNN_APPS[hparams[HP_CNN_MODEL]]["model"](**kwargs)
+
+    def get_fine_tune_cnn_model(
+        classes: int, weights: Optional[str] = None, pooling: str = "avg"
+    ):
+        return tf.keras.models.Sequential(
+            [
+                tf.keras.applications.InceptionResNetV2(
+                    include_top=False,
+                    weights=weights if weights else None,
+                    input_tensor=None,
+                    input_shape=None,
+                    pooling=None,
+                    classes=classes,
+                ),
+                tf.keras.layers.GlobalAveragePooling2D()
+                if pooling == "avg"
+                else tf.keras.layers.GlobalAveragePooling2D(),
+                tf.keras.layers.Dropout(0.1),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(256, activation="relu"),
+                # tf.keras.layers.Dropout(0.1),
+                tf.keras.layers.Dense(
+                    classes, activation="softmax", name="predictions"
+                ),
+            ]
         )
-        if hparams[HP_WEIGHTS] != "imagenet":
-            kwargs["classes"] = len(CLASS_NAMES)
-        return CNN_APPS[hparams[HP_CNN_MODEL]]["class"](**kwargs)
 
     gpus = tf.config.list_logical_devices("GPU")
     with tf.distribute.MirroredStrategy(gpus).scope():
@@ -133,7 +156,10 @@ def execute_run(hparams, run_name):
                     ),
                     tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
                     # Convolution
-                    get_cnn_model(hparams),
+                    # get_cnn_model(hparams),
+                    get_fine_tune_cnn_model(
+                        classes=len(CLASS_NAMES), weights=hparams[HP_WEIGHTS]
+                    ),
                 ]
             )
         )
@@ -141,7 +167,7 @@ def execute_run(hparams, run_name):
         model.compile(
             optimizer=tf.keras.optimizers.Adam(learning_rate=hparams[HP_LEARNING_RATE]),
             loss="sparse_categorical_crossentropy",
-            metrics=[METRIC_TEST_ACCURACY],
+            metrics=[METRIC_ACCURACY],
         )
 
     # Defining a file writer for confusion matrix logging
@@ -176,14 +202,13 @@ def execute_run(hparams, run_name):
                 filepath=str(CHECKPOINTS_DIR)
                 + f"/{run_name}"
                 + "-epoch-{epoch:04d}.ckpt",
-                monitor=METRIC_TEST_ACCURACY,
                 verbose=1,
                 save_best_only=True,
                 save_freq="epoch",
             ),
             tf.keras.callbacks.EarlyStopping(
                 min_delta=0.0001,
-                patience=12,
+                patience=20,
                 restore_best_weights=True,
             ),
         ],
@@ -230,9 +255,7 @@ def train_all():
                         with run_logs_file_writer.as_default():
                             hp.hparams(hparams)  # record the values used in this run
                             test_accuracy = execute_run(hparams, run_name)
-                            tf.summary.scalar(
-                                METRIC_TEST_ACCURACY, test_accuracy, step=1
-                            )
+                            tf.summary.scalar(METRIC_ACCURACY, test_accuracy, step=1)
                     except Exception as err:
                         raise err
                     else:
