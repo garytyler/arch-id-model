@@ -11,8 +11,9 @@ import tensorboard
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from cnn import CNN_APPS
+from splits import generate_dataset_splits
 from tensorboard.plugins.hparams import api as hp
-from utils import generate_dataset_splits, plot_confusion_matrix, plot_to_image
+from utils import plot_confusion_matrix, plot_to_image
 
 
 class Trainer:
