@@ -6,17 +6,19 @@ services:
       context: .
       target: dev-stage
       args:
-        - USERNAME=${USER}
+        - USER=${USER}
+    command: /bin/sh -c "while sleep 1000; do :; done"
     ports:
       - 6007:6007
-    runtime: nvidia
-    env_file:
-      - .env.dev
-    command: /bin/sh -c "while sleep 1000; do :; done"
     volumes:
-      - workspace:/workspace
-      - .:/workspace:rw
-      - /var/run/docker.sock:/var/run/docker.sock:rw
-
+      - "workspace:/workspace"
+      - ".:/workspace:rw"
+    runtime: nvidia
+    environment:
+      - "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0}"
+      - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
+      - "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
+      - "TF_FORCE_GPU_ALLOW_GROWTH=true"
+      - "TF_GPU_THREAD_MODE=gpu_private"
 volumes:
   workspace:

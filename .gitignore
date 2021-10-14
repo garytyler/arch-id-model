@@ -15,4 +15,3 @@
 !/arch_recognizer
 !/arch_recognizer/*.py
 !/arch_recognizer/**/*.py
-!.env.dev

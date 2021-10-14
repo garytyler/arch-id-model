@@ -24,5 +24,4 @@
 	],
 	"workspaceFolder": "/workspace",
 	"postCreateCommand": "sudo chown 1000 /workspace",
-	"postAttachCommand": "/bin/bash -c 'source ~/.profile",
 }

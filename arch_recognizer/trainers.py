@@ -1,4 +1,5 @@
 import operator
+import os
 from functools import reduce
 from pathlib import Path
 from typing import Callable, Optional, Tuple
@@ -35,6 +36,7 @@ class Trainer:
             (len(list(d.iterdir())) for d in self.source_dir.iterdir()),
         )
 
+        os.makedirs(self.input_dir, exist_ok=True)
         self.dataset_builder = tfds.ImageFolder(self.input_dir)
         self.class_names = [
             self.dataset_builder.info.features["label"].int2str(n)
@@ -48,18 +50,11 @@ class Trainer:
         self.hp_learning_rate = hp.HParam(
             "learning_rate",
             # hp.Discrete([float(1e-4), float(3e-4), float(5e-4)]),
-            hp.Discrete([float(1e-4), float(5e-4)]),
+            # hp.Discrete([float(1e-4), float(5e-4)]),
+            hp.Discrete([float(1e-3), float(5e-3)]),
         )
 
         self.metric_accuracy = "accuracy"
-
-        with tf.summary.create_file_writer(
-            str(self.logs_dir / "hparam_tuning")
-        ).as_default():
-            hp.hparams_config(
-                hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
-                metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
-            )
 
     def get_dataset(
         self,
@@ -83,6 +78,17 @@ class Trainer:
                 )
             )
             .map(lambda img, _: (preprocessor(img), _), num_parallel_calls=16)
+            # .map(
+            #     lambda img, _: (
+            #         (
+            #             tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 255)(
+            #                 img
+            #             ),
+            #             _,
+            #         )
+            #     ),
+            #     num_parallel_calls=16,
+            # )
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
             .shuffle(
@@ -92,9 +98,7 @@ class Trainer:
             )
         )
 
-    def get_fine_tune_cnn_model(
-        self, weights: Optional[str] = None, pooling: str = "avg"
-    ):
+    def get_cnn_model(self, weights: Optional[str] = None, pooling: str = "avg"):
         return tf.keras.models.Sequential(
             [
                 tf.keras.applications.InceptionResNetV2(
@@ -122,24 +126,17 @@ class Trainer:
     def execute_run(self, hparams, run_name):
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
 
-        train_ds = self.get_dataset(
-            "train",
-            image_size=cnn_app["image_size"],
-            batch_size=cnn_app["batch_size"],
-            preprocessor=cnn_app["preprocessor"],
-        )
-        val_ds = self.get_dataset(
-            "val",
-            image_size=cnn_app["image_size"],
-            batch_size=cnn_app["batch_size"],
-            preprocessor=cnn_app["preprocessor"],
-        )
-        test_ds = self.get_dataset(
-            "test",
-            image_size=cnn_app["image_size"],
-            batch_size=cnn_app["batch_size"],
-            preprocessor=cnn_app["preprocessor"],
-        )
+        def get_run_dataset(split: str) -> tf.data.Dataset:
+            return self.get_dataset(
+                split,
+                image_size=cnn_app["image_size"],
+                batch_size=cnn_app["batch_size"],
+                preprocessor=cnn_app["preprocessor"],
+            )
+
+        train_ds = get_run_dataset("train")
+        val_ds = get_run_dataset("val")
+        test_ds = get_run_dataset("test")
 
         def restore_weights_from_checkpoint(model):
             if not self.checkpoints_dir.exists():
@@ -164,7 +161,7 @@ class Trainer:
                         tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
                         # Convolution
                         # get_cnn_model(hparams),
-                        self.get_fine_tune_cnn_model(weights=hparams[self.hp_weights]),
+                        self.get_cnn_model(weights=hparams[self.hp_weights]),
                     ]
                 )
             )
@@ -197,6 +194,7 @@ class Trainer:
             train_ds,
             validation_data=val_ds,
             epochs=100,
+            use_multiprocessing=True,
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
                     log_dir=self.logs_dir / run_name,
@@ -223,8 +221,10 @@ class Trainer:
             ],
         )
 
-        _, test_accuracy = model.evaluate(test_ds)
-        return test_accuracy
+        _, accuracy = model.evaluate(test_ds)
+        print("METRIC NAMES:", model.metrics_names)
+
+        return accuracy
 
     def launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
@@ -236,6 +236,14 @@ class Trainer:
         if skip_splits_generation:
             self.input_dir = generate_dataset_splits(
                 src_dir=self.source_dir, dst_dir=self.input_dir, seed=self.seed
+            )
+
+        with tf.summary.create_file_writer(
+            str(self.logs_dir / "hparam_tuning")
+        ).as_default():
+            hp.hparams_config(
+                hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
+                metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 
         run_num = 0
