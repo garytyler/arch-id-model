@@ -1,5 +1,5 @@
 # Build training environment
-FROM tensorflow/tensorflow:latest-gpu-jupyter AS train-stage
+FROM tensorflow/tensorflow:2.6.0-gpu-jupyter AS train-stage
 
 # Set working dir
 WORKDIR /workspace/

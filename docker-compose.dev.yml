@@ -15,10 +15,11 @@ services:
       - ".:/workspace:rw"
     runtime: nvidia
     environment:
-      - "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-0}"
+      - "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-}"
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"
       - "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
       - "TF_FORCE_GPU_ALLOW_GROWTH=true"
       - "TF_GPU_THREAD_MODE=gpu_private"
+      - "TF_CPP_MIN_LOG_LEVEL=1"
 volumes:
   workspace:

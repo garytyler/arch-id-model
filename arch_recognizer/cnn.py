@@ -1,14 +1,14 @@
 import tensorflow as tf
 
 CNN_APPS = {
-    tf.keras.applications.VGG19.__name__: {
-        "image_size": (224, 224),
-        "scale": 1.0 / 255,
-        "offset": 0,
-        "preprocessor": tf.keras.applications.vgg19.preprocess_input,
-        "class": tf.keras.applications.VGG19,
-        "batch_size": 32,
-    },
+    # tf.keras.applications.VGG19.__name__: {
+    #     "image_size": (224, 224),
+    #     "scale": 1.0 / 255,
+    #     "offset": 0,
+    #     "preprocessor": tf.keras.applications.vgg19.preprocess_input,
+    #     "class": tf.keras.applications.VGG19,
+    #     "batch_size": 32,
+    # },
     # tf.keras.applications.ResNet50V2.__name__: {
     #     "image_size": (224, 224),
     #     "scale": 1.0 / 255,
@@ -38,8 +38,8 @@ CNN_APPS = {
         "scale": 1.0,
         "offset": 0,
         "preprocessor": tf.keras.applications.inception_resnet_v2.preprocess_input,
-        "model": tf.keras.applications.InceptionResNetV2,
-        "batch_size": 32,
+        "class": tf.keras.applications.InceptionResNetV2,
+        "batch_size": 16,
     },
     # tf.keras.applications.MobileNetV2.__name__: {
     #     "image_size": (224, 224),

@@ -13,7 +13,7 @@ def generate_dataset_splits(
     dst_dir: Path,
     seed: int,
     ratios: Dict[str, float] = {"val": 0.15, "test": 0.15},
-    quantity_multiplier: float = 1.0,
+    proportion: float = 1.0,
 ) -> Path:
     rng = np.random.default_rng(seed=seed)
     dst_files: dict = {"train": dict()}
@@ -22,7 +22,7 @@ def generate_dataset_splits(
     # Generate new
     for src_class_dir in src_dir.iterdir():
         src_class_files = list(src_class_dir.iterdir())
-        src_class_count = round(len(src_class_files) * quantity_multiplier)
+        src_class_count = round(len(src_class_files) * proportion)
 
         # Shuffle files
         random.shuffle(src_class_files, random=rng.random)
