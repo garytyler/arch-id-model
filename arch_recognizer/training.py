@@ -52,7 +52,13 @@ class Trainer:
             for n in range(self.dataset_builder.info.features["label"].num_classes)
         ]
 
-    def get_training_runs(self):
+    def _launch_tensorboard(self):
+        tb = tensorboard.program.TensorBoard()
+        tb.configure(argv=[None, f"--logdir={self.logs_dir}", "--bind_all"])
+        url = tb.launch()
+        print(f"Tensorflow listening on {url}")
+
+    def _create_training_run_hyperparams(self):
         # Prepare hyperparameters
         self.hp_cnn_model = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
         self.hp_weights = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
@@ -78,6 +84,15 @@ class Trainer:
                             self.hp_learning_rate: learning_rate,
                         }
                     )
+
+        with tf.summary.create_file_writer(
+            str(self.logs_dir / "hparam_tuning")
+        ).as_default():
+            hp.hparams_config(
+                hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
+                metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
+            )
+
         return runs
 
     def get_dataset(
@@ -115,9 +130,8 @@ class Trainer:
         )
 
     # Define training run function
-    def execute_run(self, hparams, run_name: str, total_epochs: int) -> Optional[float]:
+    def _execute_run(self, hparams, run_name: str, max_epochs: int) -> Optional[float]:
         # Skip or restore checkpoint
-
         latest_epoch = 0
         checkpoints_run_dir = self.checkpoints_dir / run_name
         latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
@@ -128,12 +142,16 @@ class Trainer:
             latest_epoch = int(
                 Path(latest_checkpoint_path).name.replace(f"{run_name}-", "")[:4]
             )
-            if latest_epoch >= total_epochs:
-                print(f"Skipping: {run_name} ({total_epochs} completed)")
+            if latest_epoch >= max_epochs:
+                print(
+                    f"Skipping: {run_name}",
+                    f"(max epochs completed, latest_epoch={latest_epoch})",
+                )
                 return None
             elif early_stopped_file_path.exists():
                 with open(early_stopped_file_path, "r") as f:
-                    print(f"Skipping: {run_name} (early stopped: {f.read()})")
+                    patience = f.readlines()[0]
+                    print(f"Skipping: {run_name} (early stopped, patience={patience})")
                 return None
             else:
                 print(f"Restored: {Path(latest_checkpoint_path).name}")
@@ -161,45 +179,48 @@ class Trainer:
         #         )(x)
         #         tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
 
-        model = tf.keras.models.Sequential(
-            [
-                # Preprocessing
-                # tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 255),
-                # cnn_app["preprocessor"],
-                # Augmentation
-                tf.keras.layers.experimental.preprocessing.RandomFlip(
-                    "horizontal", input_shape=(*cnn_app["image_size"], 3)
-                ),
-                tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-                # Convolution
-                # get_cnn_model(hparams),
-                # self.get_cnn_model(weights=hparams[self.hp_weights]),
-                cnn_app["class"](
-                    include_top=True,
-                    weights=None,
-                    classes=len(self.class_names),
-                ),
-                # tf.keras.layers.GlobalAveragePooling2D()
-                # # if pooling == "avg"
-                # # else tf.keras.layers.GlobalAveragePooling2D(),
-                # ,
-                # tf.keras.layers.Dropout(0.1),
-                # tf.keras.layers.Flatten(),
-                # tf.keras.layers.Dense(256, activation="relu"),
-                # # tf.keras.layers.Dropout(0.1),
-                # tf.keras.layers.Dense(
-                #     len(self.class_names), activation="softmax", name="predictions"
-                # ),
-            ]
-        )
-        # model = cnn_app["class"](
-        #     include_top=True,
-        #     weights=None,
-        #     classes=len(self.class_names),
+        # model = tf.keras.models.Sequential(
+        #     [
+        #         # Preprocessing
+        #         # tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 255),
+        #         # cnn_app["preprocessor"],
+        #         # Augmentation
+        #         tf.keras.layers.experimental.preprocessing.RandomFlip(
+        #             "horizontal", input_shape=(*cnn_app["image_size"], 3)
+        #         ),
+        #         tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
+        #         # Convolution
+        #         # get_cnn_model(hparams),
+        #         # self.get_cnn_model(weights=hparams[self.hp_weights]),
+        #         cnn_app["class"](
+        #             include_top=True,
+        #             weights=None,
+        #             classes=len(self.class_names),
+        #         ),
+        #         # tf.keras.layers.GlobalAveragePooling2D()
+        #         # # if pooling == "avg"
+        #         # # else tf.keras.layers.GlobalAveragePooling2D(),
+        #         # ,
+        #         # tf.keras.layers.Dropout(0.1),
+        #         # tf.keras.layers.Flatten(),
+        #         # tf.keras.layers.Dense(256, activation="relu"),
+        #         # # tf.keras.layers.Dropout(0.1),
+        #         # tf.keras.layers.Dense(
+        #         #     len(self.class_names), activation="softmax", name="predictions"
+        #         # ),
+        #     ]
         # )
+        model = cnn_app["class"](
+            include_top=True,
+            weights=None,
+            classes=len(self.class_names),
+        )
 
         # Compile
-        adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
+        # adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
+        adam = tf.compat.v2.keras.optimizers.Adam(
+            learning_rate=hparams[self.hp_learning_rate]
+        )
         model.compile(
             optimizer=adam,
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
@@ -223,7 +244,7 @@ class Trainer:
                 tf.summary.image("Confusion Matrix", cm_image, step=epoch)
 
         checkpoint_basename = (
-            f"{run_name}" + "-{epoch:04d}" + "-{val_loss:.2f}" + "-{val_accuracy:.2f}"
+            f"{run_name}-{{epoch:04d}}-{{val_loss:.2f}}-{{val_accuracy:.2f}}"
         )
 
         early_stopping_cb = tf.keras.callbacks.EarlyStopping(
@@ -233,12 +254,10 @@ class Trainer:
             restore_best_weights=True,
         )
 
-        print(early_stopping_cb.patience)
-
         history = model.fit(
             train_ds,
             validation_data=val_ds,
-            epochs=total_epochs,
+            epochs=max_epochs,
             use_multiprocessing=True,
             initial_epoch=latest_epoch,
             callbacks=[
@@ -252,17 +271,15 @@ class Trainer:
                     # write_images=True,
                 ),
                 tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix),
-                # Save model
+                # Model Checkpoint
                 tf.keras.callbacks.ModelCheckpoint(
                     filepath=f"{checkpoints_run_dir}/{checkpoint_basename}.ckpt",
                     verbose=1,
                     save_best_only=True,
                     save_freq="epoch",
                 ),
-                # Save weights
+                # Weights Checkpoint
                 tf.keras.callbacks.ModelCheckpoint(
-                    # monitor="val_accuracy",
-                    # filepath=.hd5",
                     filepath=f"{checkpoints_run_dir}/{checkpoint_basename}",
                     verbose=1,
                     save_weights_only=True,
@@ -280,29 +297,16 @@ class Trainer:
         _, accuracy = model.evaluate(test_ds)
         return accuracy
 
-    def launch_tensorboard(self):
-        tb = tensorboard.program.TensorBoard()
-        tb.configure(argv=[None, f"--logdir={self.logs_dir}", "--bind_all"])
-        url = tb.launch()
-        print(f"Tensorflow listening on {url}")
-
-    def train(self, dataset_proportion: float, epochs: int):
+    def train(self, dataset_proportion: float, max_epochs: int):
         generate_dataset_splits(
             src_dir=self.source_dir,
             dst_dir=self.input_dir,
             seed=self.seed,
             proportion=dataset_proportion,
         )
+        self._launch_tensorboard()
 
-        training_runs = self.get_training_runs()
-
-        with tf.summary.create_file_writer(
-            str(self.logs_dir / "hparam_tuning")
-        ).as_default():
-            hp.hparams_config(
-                hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
-                metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
-            )
+        training_runs = self._create_training_run_hyperparams()
 
         for run_num, hparams in enumerate(training_runs):
             run_name = (
@@ -315,36 +319,12 @@ class Trainer:
             run_logs_file_writer = tf.summary.create_file_writer(
                 logdir=str(run_logs_dir)
             )
-            run_completed_file_path = Path(run_logs_dir / "completed")
-
-            # else:
-            #     print(f"Starting run: {run_name}")
-            #     try:
-            #         with run_logs_file_writer.as_default():
-            #             hp.hparams(hparams)
-            #             with tf.distribute.MirroredStrategy().scope():
-            #                 test_accuracy = self.execute_run(
-            #                     hparams, run_name, epochs=epochs
-            #                 )
-            #                 if test_accuracy is None:
-            #                     print(f"Skipping run: {run_name} ({f.read()})")
-            #             tf.summary.scalar(self.metric_accuracy, test_accuracy, step=1)
-            #     except Exception as err:
-            #         raise err
-            #     else:
-            #         with open(run_completed_file_path, "w") as f:
-            #             f.write(f"Test Accuracy: {test_accuracy}")
 
             with run_logs_file_writer.as_default():
                 hp.hparams(hparams)
                 with tf.distribute.MirroredStrategy().scope():
-                    accuracy = self.execute_run(hparams, run_name, total_epochs=epochs)
-                    if accuracy is None:
-                        continue
-
+                    accuracy = self._execute_run(
+                        hparams, run_name, max_epochs=max_epochs
+                    )
+                if accuracy is not None:
                     tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
-            # except Exception as err:
-            #     raise err
-            # else:
-            #     with open(run_completed_file_path, "w") as f:
-            #         f.write(f"Test Accuracy: {test_accuracy}")

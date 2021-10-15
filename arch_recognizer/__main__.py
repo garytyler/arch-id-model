@@ -36,31 +36,36 @@ def test(args):
 
 def train(args):
     trainer = training.Trainer()
-    trainer.launch_tensorboard()
-    trainer.train(dataset_proportion=args.proportion, epochs=args.epochs)
+    trainer.train(
+        dataset_proportion=args.dataset_proportion,
+        max_epochs=args.max_epochs,
+    )
 
 
 if __name__ == "__main__":
     # top-level parser
     parser = argparse.ArgumentParser(prog="arch_recognizer")
-    subparsers = parser.add_subparsers(help="sub-command help")
+    subparsers = parser.add_subparsers(help="sub-command help", dest="help")
 
     # train command
-    parser_train = subparsers.add_parser("train", help="train help")
+    parser_train = subparsers.add_parser("train", help="train model")
     parser_train.set_defaults(func=train)
     parser_train.add_argument(
-        "-p", "--proportion", default=1.0, type=float, help="Proportion of dataset"
+        "-e", "--max-epochs", default=100, type=int, help="Maximum epochs per run"
     )
     parser_train.add_argument(
-        "-e", "--epochs", default=100, type=int, help="Number of epochs"
+        "--dataset-proportion", default=1.0, type=float, help="Proportion of dataset"
     )
 
     # test command
-    parser_test = subparsers.add_parser("test", help="test help")
+    parser_test = subparsers.add_parser("test", help="test model from file")
     parser_test.set_defaults(func=test)
     parser_test.add_argument(
         "model_path", type=Path, help="Path to the model file/directory"
     )
 
     args = parser.parse_args(sys.argv[1:])
-    args.func(args)
+    if getattr(args, "func", None) is None:
+        parser.print_help()
+    else:
+        args.func(vars(args))

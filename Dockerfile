@@ -21,9 +21,9 @@ RUN apt-get update \
 # Upgrade pip and install project dependencies from pip
 RUN pip install --upgrade pip
 RUN pip install -U \
-    sklearn \
-    tensorflow-datasets \
-    tensorboard-plugin-profile
+    sklearn==0.0 \
+    tensorflow-datasets==4.4.0 \
+    tensorboard-plugin-profile==2.5.0
 
 # Set as non-root user
 USER ${USER}
@@ -40,11 +40,10 @@ RUN apt-get update \
 
 # Install development dependencies from pip
 RUN pip install -U \
-    black \
-    isort \
-    flake8 \
-    mypy \
-    docker
+    black==21.9b0 \
+    isort==5.9.3 \
+    flake8==4.0.1 \
+    mypy==0.910
 
 # Set as non-root user
 USER ${USER}
