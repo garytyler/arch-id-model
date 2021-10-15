@@ -22,14 +22,14 @@ BASE_DIR: Path = Path(__file__).parent.parent.absolute()
 SOURCE_DIR: Path = BASE_DIR / "dataset"
 OUTPUT_DIR: Path = BASE_DIR / "output"
 
-log_formatter = logging.Formatter(
+run_log_formatter = logging.Formatter(
     fmt="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
     datefmt=r"%Y-%m-%d %H:%M:%S",
 )
-log_stream_handler = logging.StreamHandler(sys.stdout)
-log_stream_handler.setFormatter(log_formatter)
+# log_stream_handler.setFormatter(log_formatter)
 # logging.basicConfig(level=logging.INFO, handlers=[log_stream_handler])
 
+log_stream_handler = logging.StreamHandler()
 log = logging.getLogger(__name__)
 log.addHandler(log_stream_handler)
 
@@ -46,9 +46,7 @@ log.addHandler(log_stream_handler)
 class Trainer:
     seed = 123456
 
-    run_loggers = [
-        log,
-    ]
+    run_loggers = [log]
 
     def __init__(self):
         self.source_dir = SOURCE_DIR
@@ -79,14 +77,11 @@ class Trainer:
         for logger in self.run_loggers:
             if getattr(self, "run_log_file_handler", None) and logger.hasHandlers():
                 logger.removeHandler(self.run_log_file_handler)
-                # del self.run_log_file_handler
-        # if getattr(self, "run_log_file_handler", None) and log.hasHandlers():
-        #     log.removeHandler(self.run_log_file_handler)
-        #     del self.run_log_file_handler
+
+        os.makedirs(path.parent, exist_ok=True)
         self.run_log_file_handler = logging.FileHandler(path)
-        self.run_log_file_handler.setFormatter(log_formatter)
+        self.run_log_file_handler.setFormatter(run_log_formatter)
         self.run_log_file_handler.setLevel(level)
-        # self.run_log_file_handler.setFormatter(log_formatter)
         for logger in self.run_loggers:
             logger.addHandler(self.run_log_file_handler)
 
@@ -94,6 +89,7 @@ class Trainer:
         tb = tensorboard.program.TensorBoard()
         tb.configure(argv=[None, f"--logdir={self.logs_dir}", "--bind_all"])
         url = tb.launch()
+
         log.info(f"Tensorflow listening on {url}")
 
     def _create_training_run_hyperparams(self):
@@ -145,6 +141,10 @@ class Trainer:
             tf.data.experimental.AutoShardPolicy.DATA
         )
         _options.threading.max_intra_op_parallelism = 1
+
+        def _preprocess(img, lbl):
+            return preprocessor(img), lbl
+
         return (
             # self.dataset_builder.as_dataset(split=split, batch_size=batch_size)
             tf.keras.preprocessing.image_dataset_from_directory(
@@ -153,36 +153,41 @@ class Trainer:
                 label_mode="int",
                 image_size=image_size,
                 batch_size=batch_size,
-                shuffle=True,
+                # shuffle=True,
                 seed=self.seed,
             )
             .with_options(_options)
             # .map((lambda img, lbl: (preprocessor(img), lbl)), num_parallel_calls=16)
             # .map(lambda img, _: (preprocessor(img), _), num_parallel_calls=16)
-            .map(lambda img, _: (preprocessor(img), _))
+            .map(_preprocess, num_parallel_calls=16)
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
-            # .shuffle(
-            #     buffer_size=self.dataset_total_count,
-            #     seed=self.seed,
-            #     # reshuffle_each_iteration=True,
-            # )
+            .shuffle(
+                buffer_size=self.dataset_total_count,
+                seed=self.seed,
+                reshuffle_each_iteration=True,
+            )
         )
+
+    def get_checkpoints_run_dir(self, run_name) -> Path:
+        return self.checkpoints_dir / run_name
 
     # Define training run function
     def _execute_run(self, hparams, run_name: str, max_epochs: int) -> Optional[float]:
         # Skip or restore checkpoint
         latest_epoch = 0
-        checkpoints_run_dir = self.checkpoints_dir / run_name
+        checkpoints_run_dir = self.get_checkpoints_run_dir(run_name)
         latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
         early_stopped_file_path = Path(self.logs_dir / run_name / "early_stopped")
         if not latest_checkpoint_path:
+
             log.info(f"Starting: {run_name}")
         else:
             latest_epoch = int(
                 Path(latest_checkpoint_path).name.replace(f"{run_name}-", "")[:4]
             )
             if latest_epoch >= max_epochs:
+
                 log.info(
                     f"Skipping: {run_name}",
                     f"(max epochs completed, latest_epoch={latest_epoch})",
@@ -191,11 +196,13 @@ class Trainer:
             elif early_stopped_file_path.exists():
                 with open(early_stopped_file_path, "r") as f:
                     patience = f.readlines()[0].strip()
+
                     log.info(
                         f"Skipping: {run_name} (early stopped, patience={patience})"
                     )
                 return None
             else:
+
                 log.info(f"Restored: {Path(latest_checkpoint_path).name}")
 
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
@@ -212,44 +219,38 @@ class Trainer:
         val_ds = get_run_dataset("val")
         test_ds = get_run_dataset("test")
 
-        # class Net:
-        #     def __init__(self):
-        #         super(self).__init__()
-
+        # model = tf.keras.models.Sequential(
+        #     [
         #         tf.keras.layers.experimental.preprocessing.RandomFlip(
         #             "horizontal", input_shape=(*cnn_app["image_size"], 3)
-        #         )(x)
+        #         ),
         #         tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-
+        #         cnn_app["class"](
+        #             include_top=True,
+        #             weights=None,
+        #             classes=len(self.class_names),
+        #         ),
+        #     ]
+        # )
         model = tf.keras.models.Sequential(
             [
-                # Preprocessing
-                # tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 255),
-                # cnn_app["preprocessor"],
-                # Augmentation
                 tf.keras.layers.experimental.preprocessing.RandomFlip(
                     "horizontal", input_shape=(*cnn_app["image_size"], 3)
                 ),
                 tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-                # Convolution
-                # get_cnn_model(hparams),
-                # self.get_cnn_model(weights=hparams[self.hp_weights]),
                 cnn_app["class"](
-                    include_top=True,
-                    weights=None,
+                    include_top=False,
+                    weights=hparams[self.hp_weights] or None,
                     classes=len(self.class_names),
                 ),
-                # tf.keras.layers.GlobalAveragePooling2D()
-                # # if pooling == "avg"
-                # # else tf.keras.layers.GlobalAveragePooling2D(),
-                # ,
+                tf.keras.layers.GlobalAveragePooling2D(),
+                tf.keras.layers.Dropout(0.1),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(256, activation="relu"),
                 # tf.keras.layers.Dropout(0.1),
-                # tf.keras.layers.Flatten(),
-                # tf.keras.layers.Dense(256, activation="relu"),
-                # # tf.keras.layers.Dropout(0.1),
-                # tf.keras.layers.Dense(
-                #     len(self.class_names), activation="softmax", name="predictions"
-                # ),
+                tf.keras.layers.Dense(
+                    len(self.class_names), activation="softmax", name="predictions"
+                ),
             ]
         )
         # model = cnn_app["class"](
@@ -259,10 +260,7 @@ class Trainer:
         # )
 
         # Compile
-        # adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
-        adam = tf.compat.v2.keras.optimizers.Adam(
-            learning_rate=hparams[self.hp_learning_rate]
-        )
+        adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
         model.compile(
             optimizer=adam,
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
@@ -292,7 +290,7 @@ class Trainer:
         early_stopping_cb = tf.keras.callbacks.EarlyStopping(
             # monitor="val_accuracy",
             min_delta=0.0001,
-            patience=20,
+            patience=50,
             restore_best_weights=True,
         )
 
@@ -360,7 +358,7 @@ class Trainer:
                 f"-{hparams[self.hp_learning_rate]}"
             )
             run_logs_dir = self.logs_dir / run_name
-            # self._set_run_log_file(run_logs_dir / f"{run_name}.log")
+            self._set_run_log_file(run_logs_dir / f"{run_name}.log")
             run_logs_file_writer = tf.summary.create_file_writer(
                 logdir=str(run_logs_dir)
             )

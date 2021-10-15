@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 
 import cnn
+import numpy as np
+import sklearn
 import tensorflow as tf
 import training
 
@@ -10,8 +12,10 @@ REPO_DIR = Path(__file__).parent.parent.absolute()
 
 
 def test(args):
-    model = tf.keras.models.load_model(args.model_path)
     trainer = training.Trainer()
+    checkpoints_run_dir = trainer.get_checkpoints_run_dir(args.run_name)
+    latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
+    model = tf.keras.models.load_model(latest_checkpoint_path + ".ckpt")
     cnn_app = cnn.CNN_APPS["InceptionResNetV2"]
     test_ds = trainer.get_dataset(
         split="test",
@@ -21,9 +25,6 @@ def test(args):
     )
     loss, accuracy = model.evaluate(test_ds)
     print(f"Test loss: {loss}\nTest accuracy: {accuracy}")
-
-    import numpy as np
-    import sklearn
 
     pred_y, true_y = [], []
     for batch_X, batch_y in test_ds:
@@ -67,7 +68,8 @@ if __name__ == "__main__":
     parser_test = subparsers.add_parser("test", help="test model from file")
     parser_test.set_defaults(func=test)
     parser_test.add_argument(
-        "model_path",
+        # "model_path",
+        "run_name",
         type=Path,
         help="Path to the model file/directory",
     )
