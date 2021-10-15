@@ -45,27 +45,35 @@ def train(args):
 if __name__ == "__main__":
     # top-level parser
     parser = argparse.ArgumentParser(prog="arch_recognizer")
-    subparsers = parser.add_subparsers(help="sub-command help", dest="help")
+    subparsers = parser.add_subparsers(help="sub-command help")
 
     # train command
     parser_train = subparsers.add_parser("train", help="train model")
     parser_train.set_defaults(func=train)
     parser_train.add_argument(
-        "-e", "--max-epochs", default=100, type=int, help="Maximum epochs per run"
+        "--max-epochs",
+        default=100,
+        type=int,
+        help="Maximum epochs per run",
     )
     parser_train.add_argument(
-        "--dataset-proportion", default=1.0, type=float, help="Proportion of dataset"
+        "--dataset-proportion",
+        default=1.0,
+        type=float,
+        help="Proportion of dataset",
     )
 
     # test command
     parser_test = subparsers.add_parser("test", help="test model from file")
     parser_test.set_defaults(func=test)
     parser_test.add_argument(
-        "model_path", type=Path, help="Path to the model file/directory"
+        "model_path",
+        type=Path,
+        help="Path to the model file/directory",
     )
 
     args = parser.parse_args(sys.argv[1:])
     if getattr(args, "func", None) is None:
         parser.print_help()
     else:
-        args.func(vars(args))
+        args.func(args)

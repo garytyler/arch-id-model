@@ -12,14 +12,14 @@ elif [[ ! -d "$DATASET_SOURCE_DIR" ]]; then
     exit
 fi
 
-IMAGE_NAME=arch-recognizer/training
-
+IMAGE_NAME=arch-recognizer/trainings
 docker build \
     --tag ${IMAGE_NAME} \
     --target=train-stage \
     --build-arg="USER=$(whoami)" \
     -- ${THIS_DIR}/
 
+RUN_COMMAND="python /workspace/arch_recognizer $@"
 docker run \
     --runtime=nvidia \
     --publish=6006:6006 \
@@ -30,6 +30,8 @@ docker run \
     --env "CUDA_DEVICE_ORDER=PCI_BUS_ID" \
     --env "TF_FORCE_GPU_ALLOW_GROWTH=true" \
     --env "TF_GPU_THREAD_MODE=gpu_private" \
-    --env "TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-0}" \
+    --env "TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-1}" \
     --rm -- ${IMAGE_NAME} \
-    /bin/bash -c "python /workspace/arch_recognizer train $@"
+    /bin/bash -c "${RUN_COMMAND}"
+
+# --env "AUTOGRAPH_VERBOSITY=${AUTOGRAPH_VERBOSITY:-2}" \

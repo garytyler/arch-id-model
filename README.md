@@ -8,7 +8,12 @@
 
 See: https://stackoverflow.com/a/40982782
 
-Control tensorflow logging output with environment variable `TF_CPP_MIN_LOG_LEVEL`.
+Control tensorflow logging output with environment variables:
+
+- `TF_CPP_MIN_LOG_LEVEL` = C++ logs
+- `AUTOGRAPH_VERBOSITY` = tf.autograth output
+
+Levels:
 
 - 0 = all messages are logged (default behavior)
 - 1 = `INFO` messages are not printed
