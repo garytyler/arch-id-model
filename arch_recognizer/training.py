@@ -43,7 +43,7 @@ class Trainer:
         self.splits_dir: Path = Path(tempfile.mkdtemp(prefix=f"{APP_NAME}-splits-"))
 
     def __del__(self):
-        shutil.rmtree(self.splits_dir, exist_ok=True)
+        shutil.rmtree(self.splits_dir, ignore_errors=True)
 
     def _set_run_log_file(self, path, level=logging.INFO):
         for logger in self.run_loggers:
