@@ -30,8 +30,6 @@ docker run \
     --env "CUDA_DEVICE_ORDER=PCI_BUS_ID" \
     --env "TF_FORCE_GPU_ALLOW_GROWTH=true" \
     --env "TF_GPU_THREAD_MODE=gpu_private" \
-    --env "TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-1}" \
+    --env "TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-2}" \
     --rm -- ${IMAGE_NAME} \
     /bin/bash -c "${RUN_COMMAND}"
-
-# --env "AUTOGRAPH_VERBOSITY=${AUTOGRAPH_VERBOSITY:-2}" \

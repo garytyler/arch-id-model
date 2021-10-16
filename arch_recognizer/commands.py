@@ -9,7 +9,7 @@ def test(args):
     trainer = training.Trainer()
 
     def _get_run_checkpoints_dir():
-        for f in training.CHECKPOINTS_DIR.iterdir():
+        for f in training.CP_DIR.iterdir():
             if f.name.startswith("run-"):
                 n = int(f.name.replace("run-", "")[0])
             else:

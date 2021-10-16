@@ -7,11 +7,6 @@ import settings
 import tensorflow as tf
 
 app_log_formatter = logging.Formatter(
-    fmt="[%(asctime)s][%(filename)s:%(lineno)s][%(levelname)s] %(message)s",
-    datefmt=settings.DATE_FORMAT,
-)
-
-tf_log_formatter = logging.Formatter(
     fmt="[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
     datefmt=settings.DATE_FORMAT,
 )
@@ -26,7 +21,7 @@ def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, 
     )
 
     session_log_path = (
-        settings.LOGS_DIR
+        settings.PY_LOGS_DIR
         / f"{datetime.datetime.now().strftime(settings.DATE_FORMAT)}.log"
     )
     session_log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -43,7 +38,7 @@ def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, 
 
     # Configure tensorflow logger
     tf_log_stream_handler = logging.StreamHandler(sys.stdout)
-    tf_log_stream_handler.setFormatter(tf_log_formatter)
+    tf_log_stream_handler.setFormatter(app_log_formatter)
     tf_log = tf.get_logger()
     tf_log.propagate = False  # https://stackoverflow.com/a/33664610
     tf_log.setLevel(tf_log_level)

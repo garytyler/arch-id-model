@@ -1,9 +1,9 @@
+import json
 import logging
 import operator
 import os
-import sys
+import shutil
 import tempfile
-import uuid
 from functools import reduce
 from pathlib import Path
 from typing import Callable, Optional, Tuple
@@ -17,7 +17,7 @@ import tensorflow as tf
 from loggers import app_log_formatter
 from models import CNN_APPS
 from plotting import plot_confusion_matrix, plot_to_image
-from settings import APP_NAME, BASE_DIR, CHECKPOINTS_DIR, OUTPUT_DIR, SOURCE_DIR, TB_DIR
+from settings import APP_NAME, CP_DIR, DATASET_DIR, PY_LOGS_DIR, TB_LOGS_DIR
 from splitting import generate_dataset_splits
 from tensorboard.plugins.hparams import api as hp
 
@@ -30,33 +30,25 @@ class Trainer:
     run_loggers = [log]
 
     def __init__(self):
-        # SOURCE_DIR = SOURCE_DIR
-        # OUTPUT_DIR = OUTPUT_DIR
-        # CHECKPOINTS_DIR: Path = OUTPUT_DIR / "checkpoints"
-        self.logs_dir: Path = OUTPUT_DIR / "logs"
-        self.input_dir: Path = BASE_DIR / "input"
-        # self.input_dir: tempfile.gettempdir()
-        # self.input_dir: Path = Path(
-        #     BASE_DIR / f"input{str(uuid.uuid4()).replace('-','')[:4]}"
-        # )
 
-        if not SOURCE_DIR.exists() or not list(SOURCE_DIR.iterdir()):
+        if not DATASET_DIR.exists() or not list(DATASET_DIR.iterdir()):
             raise EnvironmentError(
                 "If running module directly, add source dataset to ./dataset "
                 "with structure root/classes/images"
             )
         self.dataset_total_count = reduce(
             operator.add,
-            (len(list(d.iterdir())) for d in SOURCE_DIR.iterdir()),
+            (len(list(d.iterdir())) for d in DATASET_DIR.iterdir()),
         )
+        self.splits_dir: Path = Path(tempfile.mkdtemp(prefix=f"{APP_NAME}-splits-"))
 
-        os.makedirs(self.input_dir, exist_ok=True)
+    def __del__(self):
+        shutil.rmtree(self.splits_dir, exist_ok=True)
 
     def _set_run_log_file(self, path, level=logging.INFO):
         for logger in self.run_loggers:
             if getattr(self, "run_log_file_handler", None) and logger.hasHandlers():
                 logger.removeHandler(self.run_log_file_handler)
-
         os.makedirs(path.parent, exist_ok=True)
         self.run_log_file_handler = logging.FileHandler(path)
         self.run_log_file_handler.setFormatter(app_log_formatter)
@@ -66,9 +58,8 @@ class Trainer:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        tb.configure(argv=[None, f"--logdir={TB_DIR}", "--bind_all"])
+        tb.configure(argv=[None, f"--logdir={TB_LOGS_DIR}", "--bind_all"])
         url = tb.launch()
-
         log.info(f"Tensorflow listening on {url}")
 
     def _create_training_run_hyperparams(self):
@@ -98,7 +89,9 @@ class Trainer:
                         }
                     )
 
-        with tf.summary.create_file_writer(str(TB_DIR / "hparam_tuning")).as_default():
+        with tf.summary.create_file_writer(
+            str(TB_LOGS_DIR / "hparam_tuning")
+        ).as_default():
             hp.hparams_config(
                 hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
@@ -123,37 +116,34 @@ class Trainer:
             return preprocessor(img), lbl
 
         return (
-            # self.dataset_builder.as_dataset(split=split, batch_size=batch_size)
             tf.keras.preprocessing.image_dataset_from_directory(
-                self.input_dir / split,
+                self.splits_dir / split,
                 labels="inferred",
                 label_mode="int",
                 image_size=image_size,
                 batch_size=batch_size,
-                # shuffle=True,
+                shuffle=True,
                 seed=self.seed,
             )
             .with_options(_options)
-            # .map((lambda img, lbl: (preprocessor(img), lbl)), num_parallel_calls=16)
-            # .map(lambda img, _: (preprocessor(img), _), num_parallel_calls=16)
             .map(_preprocess, num_parallel_calls=16)
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
             .shuffle(
-                buffer_size=self.dataset_total_count,
+                buffer_size=self.dataset_total_count / 10,
                 seed=self.seed,
                 reshuffle_each_iteration=True,
             )
         )
 
     def get_checkpoints_run_dir(self, run_name) -> Path:
-        return CHECKPOINTS_DIR / run_name
+        return CP_DIR / run_name
 
     # Define training run function
-    def _execute_run(self, hparams, run_name: str, max_epochs: int) -> Optional[float]:
+    def _execute_run(self, run_name: str, max_epochs: int, hparams) -> Optional[float]:
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
 
-        num_classes = len(list(SOURCE_DIR.iterdir()))
+        class_names = list([i.name for i in DATASET_DIR.iterdir()])
         model = tf.keras.models.Sequential(
             [
                 tf.keras.layers.experimental.preprocessing.RandomFlip(
@@ -163,7 +153,7 @@ class Trainer:
                 cnn_app["class"](
                     include_top=False,
                     weights=hparams[self.hp_weights] or None,
-                    classes=num_classes,
+                    classes=len(class_names),
                 ),
                 tf.keras.layers.GlobalAveragePooling2D(),
                 tf.keras.layers.Dropout(0.1),
@@ -171,41 +161,25 @@ class Trainer:
                 tf.keras.layers.Dense(256, activation="relu"),
                 # tf.keras.layers.Dropout(0.1),
                 tf.keras.layers.Dense(
-                    num_classes,
+                    len(class_names),
                     activation="softmax",
                     name="predictions",
                 ),
             ]
         )
 
-        # Skip or restore checkpoint
         latest_epoch = 0
         checkpoints_run_dir = self.get_checkpoints_run_dir(run_name)
-        latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
-        early_stopped_file_path = Path(self.logs_dir / run_name / "early_stopped")
-        if not latest_checkpoint_path:
-            log.info(f"Starting: {run_name}")
-        else:
-            latest_epoch = int(
-                Path(latest_checkpoint_path).name.replace(f"{run_name}-", "")[:4]
-            )
-            if latest_epoch >= max_epochs:
-                log.info(
-                    f"Skipping: {run_name}",
-                    f"(max epochs completed, latest_epoch={latest_epoch})",
-                )
-                return None
-            elif early_stopped_file_path.exists():
-                with open(early_stopped_file_path, "r") as f:
-                    patience = f.readlines()[0].strip()
+        # latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
 
-                    log.info(
-                        f"Skipping: {run_name} (early stopped, patience={patience})"
-                    )
-                return None
-            else:
-                model.load_weights(latest_checkpoint_path)
-                log.info(f"Restored: {Path(latest_checkpoint_path).name}")
+        completed_file_path = Path(PY_LOGS_DIR / run_name / "completed")
+        run_status: dict = {}
+        if completed_file_path.exists():
+            with open(completed_file_path, "r") as f:
+                run_status = json.loads(f.read())
+        else:
+            with open(completed_file_path, "w") as f:
+                f.write(json.dumps(run_status))
 
         # Log model summary
         model.summary(print_fn=log.info)
@@ -230,8 +204,13 @@ class Trainer:
             metrics=[self.metric_accuracy],
         )
 
-        # Defining a file writer for confusion matrix logging
-        cm_file_writer = tf.summary.create_file_writer(str(TB_DIR / run_name / "cm"))
+        # Define a file writer for confusion matrix logging
+        cm_file_writer = tf.summary.create_file_writer(
+            str(TB_LOGS_DIR / run_name / "cm")
+        )
+        test_file_writer = tf.summary.create_file_writer(
+            str(TB_LOGS_DIR / run_name / "test")
+        )
 
         def log_confusion_matrix(epoch, logs):
             pred_y, true_y = [], []
@@ -239,76 +218,84 @@ class Trainer:
                 true_y.extend(batch_y)
                 pred_y.extend(np.argmax(model.predict(batch_X), axis=-1))
             cm_data = np.nan_to_num(sklearn.metrics.confusion_matrix(true_y, pred_y))
-            cm_figure = plot_confusion_matrix(cm_data, class_names=self.class_names)
+            cm_figure = plot_confusion_matrix(cm_data, class_names=class_names)
             cm_image = plot_to_image(cm_figure)
             with cm_file_writer.as_default():
                 tf.summary.image("Confusion Matrix", cm_image, step=epoch)
 
-        checkpoint_basename = (
-            f"{run_name}-{{epoch:04d}}-{{val_loss:.2f}}-{{val_accuracy:.2f}}"
-        )
+        def on_epoch_end(epoch, logs):
+            log_confusion_matrix(epoch, logs)
+            if (epoch > 0 and epoch % 5 == 0) or epoch == max_epochs:
+                test_loss, test_accuracy = model.evaluate(test_ds)
+                log.info(
+                    f"epoch={epoch}, "
+                    f"test_loss={test_loss}, "
+                    f"test_accuracy={test_accuracy}"
+                )
+                with test_file_writer.as_default():
+                    tf.summary.scalar("test_loss", test_loss, step=epoch)
+                    tf.summary.scalar("test_accuracy", test_accuracy, step=epoch)
+                model.save(
+                    filepath=CP_DIR
+                    / run_name
+                    / f"{run_name}-{epoch}-{test_loss}-{test_accuracy}",
+                    overwrite=True,
+                    include_optimizer=True,
+                    save_format="tf",
+                    signatures=None,
+                    options=tf.saved_model.SaveOptions(
+                        save_debug_info=True, experimental_variable_policy=None
+                    ),
+                    save_traces=True,
+                )
+            if epoch >= max_epochs:
+                reason = f"max epochs reached ({epoch})"
+                run_status.update({"reason": reason})
+                with open(completed_file_path, "w") as f:
+                    f.write(json.dumps(run_status))
+                log.info(f"Completed training run: {reason}")
 
-        early_stopping_cb = tf.keras.callbacks.EarlyStopping(
-            min_delta=0.0001,
-            patience=50,
-            restore_best_weights=True,
-        )
+        patience: float = 50
 
-        history = model.fit(
+        model.fit(
             train_ds,
             validation_data=val_ds,
             epochs=max_epochs,
             use_multiprocessing=True,
             initial_epoch=latest_epoch,
             callbacks=[
-                early_stopping_cb,
                 tf.keras.callbacks.TensorBoard(
-                    log_dir=TB_DIR / run_name,
-                    histogram_freq=1,
+                    log_dir=TB_LOGS_DIR / run_name,
+                    histogram_freq=0,
                     profile_batch=0,
-                    write_images=True,
-                    # profile_batch=(10, 20),
+                    write_graph=False,
                 ),
-                tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix),
-                # Model Checkpoint
-                tf.keras.callbacks.ModelCheckpoint(
-                    filepath=f"{checkpoints_run_dir}/{checkpoint_basename}.ckpt",
-                    verbose=1,
-                    save_freq="epoch",
-                ),
-                # Weights Checkpoint
-                tf.keras.callbacks.ModelCheckpoint(
-                    filepath=f"{checkpoints_run_dir}/{checkpoint_basename}",
-                    verbose=1,
-                    save_weights_only=True,
-                    save_freq="epoch",
+                tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end),
+                tf.keras.callbacks.experimental.BackupAndRestore(checkpoints_run_dir),
+                tf.keras.callbacks.ProgbarLogger(count_mode="samples"),
+                tf.keras.callbacks.EarlyStopping(
+                    min_delta=0.0001,
+                    patience=patience,
+                    restore_best_weights=True,
                 ),
             ],
         )
 
-        with open(early_stopped_file_path, "w") as f:
-            f.write(str(early_stopping_cb.patience) + "\n\n" + str(history))
+        if not completed_file_path.exists():
+            with open(completed_file_path, "w") as f:
+                f.write(json.dumps({"reason": f"early stopped {patience}"}))
 
-        log.info(history)
-
-        _, accuracy = model.evaluate(test_ds)
-        return accuracy
+        _, test_accuracy = model.evaluate(test_ds)
+        return test_accuracy
 
     def train(self, dataset_proportion: float, max_epochs: int):
-
         self._launch_tensorboard()
 
         training_runs = self._create_training_run_hyperparams()
 
-        # self.dataset_builder = tfds.ImageFolder(self.input_dir)
-        # list(SOURCE_DIR.iterdir()) = [
-        #     self.dataset_builder.info.features["label"].int2str(n)
-        #     for n in range(self.dataset_builder.info.features["label"].num_classes)
-        # ]
-
         generate_dataset_splits(
-            src_dir=SOURCE_DIR,
-            dst_dir=self.input_dir,
+            src_dir=DATASET_DIR,
+            dst_dir=self.splits_dir,
             seed=self.seed,
             proportion=dataset_proportion,
         )
@@ -320,14 +307,15 @@ class Trainer:
                 f"-{hparams[self.hp_weights] or 'none'}"
                 f"-{hparams[self.hp_learning_rate]}"
             )
-            run_logs_dir = self.logs_dir / run_name
-            self._set_run_log_file(run_logs_dir / f"{run_name}.log")
-            run_logs_file_writer = tf.summary.create_file_writer(logdir=str(TB_DIR))
-            with run_logs_file_writer.as_default():
+            self._set_run_log_file(PY_LOGS_DIR / run_name / f"{run_name}.log")
+            hparams_file_writer = tf.summary.create_file_writer(str(TB_LOGS_DIR))
+            with hparams_file_writer.as_default():
                 hp.hparams(hparams)
-                with tf.distribute.MirroredStrategy().scope():
-                    accuracy = self._execute_run(
-                        hparams, run_name, max_epochs=max_epochs
-                    )
-                if accuracy is not None:
-                    tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
+            with tf.distribute.MirroredStrategy().scope():
+                accuracy = self._execute_run(
+                    run_name=run_name,
+                    max_epochs=max_epochs,
+                    hparams=hparams,
+                )
+            with hparams_file_writer.as_default():
+                tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
