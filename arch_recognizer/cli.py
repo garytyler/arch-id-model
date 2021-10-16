@@ -45,15 +45,11 @@ def get_parser():
     parser_train.add_argument(
         "-p",
         "--profile",
-        default=False,
-        type=bool,
         action="store_true",
         help="enable performance profiling (default: %(default)s)",
     )
     parser_train.add_argument(
         "--eager",
-        default=False,
-        type=bool,
         action="store_true",
         help="enable eager execution of tf.function calls (default: %(default)s)",
     )
