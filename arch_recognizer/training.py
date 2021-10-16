@@ -22,7 +22,7 @@ import tensorflow_datasets as tfds
 from loggers import app_log_formatter
 from models import CNN_APPS
 from plotting import plot_confusion_matrix, plot_to_image
-from settings import BASE_DIR, CHECKPOINTS_DIR, OUTPUT_DIR, SOURCE_DIR
+from settings import BASE_DIR, CHECKPOINTS_DIR, OUTPUT_DIR, SOURCE_DIR, TB_DIR
 from splitting import generate_dataset_splits
 from tensorboard.plugins.hparams import api as hp
 
@@ -73,7 +73,7 @@ class Trainer:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        tb.configure(argv=[None, f"--logdir={self.logs_dir}", "--bind_all"])
+        tb.configure(argv=[None, f"--logdir={TB_DIR}", "--bind_all"])
         url = tb.launch()
 
         log.info(f"Tensorflow listening on {url}")
@@ -105,9 +105,7 @@ class Trainer:
                         }
                     )
 
-        with tf.summary.create_file_writer(
-            str(self.logs_dir / "hparam_tuning")
-        ).as_default():
+        with tf.summary.create_file_writer(str(TB_DIR / "hparam_tuning")).as_default():
             hp.hparams_config(
                 hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
@@ -160,64 +158,8 @@ class Trainer:
 
     # Define training run function
     def _execute_run(self, hparams, run_name: str, max_epochs: int) -> Optional[float]:
-        # Skip or restore checkpoint
-        latest_epoch = 0
-        checkpoints_run_dir = self.get_checkpoints_run_dir(run_name)
-        latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
-        early_stopped_file_path = Path(self.logs_dir / run_name / "early_stopped")
-        if not latest_checkpoint_path:
-
-            log.info(f"Starting: {run_name}")
-        else:
-            latest_epoch = int(
-                Path(latest_checkpoint_path).name.replace(f"{run_name}-", "")[:4]
-            )
-            if latest_epoch >= max_epochs:
-
-                log.info(
-                    f"Skipping: {run_name}",
-                    f"(max epochs completed, latest_epoch={latest_epoch})",
-                )
-                return None
-            elif early_stopped_file_path.exists():
-                with open(early_stopped_file_path, "r") as f:
-                    patience = f.readlines()[0].strip()
-
-                    log.info(
-                        f"Skipping: {run_name} (early stopped, patience={patience})"
-                    )
-                return None
-            else:
-
-                log.info(f"Restored: {Path(latest_checkpoint_path).name}")
-
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
 
-        def get_run_dataset(split: str) -> tf.data.Dataset:
-            return self.get_dataset(
-                split,
-                image_size=cnn_app["image_size"],
-                batch_size=cnn_app["batch_size"],
-                preprocessor=cnn_app["preprocessor"],
-            )
-
-        train_ds = get_run_dataset("train")
-        val_ds = get_run_dataset("val")
-        test_ds = get_run_dataset("test")
-
-        # model = tf.keras.models.Sequential(
-        #     [
-        #         tf.keras.layers.experimental.preprocessing.RandomFlip(
-        #             "horizontal", input_shape=(*cnn_app["image_size"], 3)
-        #         ),
-        #         tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-        #         cnn_app["class"](
-        #             include_top=True,
-        #             weights=None,
-        #             classes=len(self.class_names),
-        #         ),
-        #     ]
-        # )
         model = tf.keras.models.Sequential(
             [
                 tf.keras.layers.experimental.preprocessing.RandomFlip(
@@ -239,11 +181,51 @@ class Trainer:
                 ),
             ]
         )
-        # model = cnn_app["class"](
-        #     include_top=True,
-        #     weights=None,
-        #     classes=len(self.class_names),
-        # )
+
+        # Skip or restore checkpoint
+        latest_epoch = 0
+        checkpoints_run_dir = self.get_checkpoints_run_dir(run_name)
+        latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
+        early_stopped_file_path = Path(self.logs_dir / run_name / "early_stopped")
+        if not latest_checkpoint_path:
+            log.info(f"Starting: {run_name}")
+        else:
+            latest_epoch = int(
+                Path(latest_checkpoint_path).name.replace(f"{run_name}-", "")[:4]
+            )
+            if latest_epoch >= max_epochs:
+
+                log.info(
+                    f"Skipping: {run_name}",
+                    f"(max epochs completed, latest_epoch={latest_epoch})",
+                )
+                return None
+            elif early_stopped_file_path.exists():
+                with open(early_stopped_file_path, "r") as f:
+                    patience = f.readlines()[0].strip()
+
+                    log.info(
+                        f"Skipping: {run_name} (early stopped, patience={patience})"
+                    )
+                return None
+            else:
+                model.load_weights(latest_checkpoint_path)
+                log.info(f"Restored: {Path(latest_checkpoint_path).name}")
+
+        # Log model summary
+        model.summary(print_fn=log.info)
+
+        def get_run_dataset(split: str) -> tf.data.Dataset:
+            return self.get_dataset(
+                split,
+                image_size=cnn_app["image_size"],
+                batch_size=cnn_app["batch_size"],
+                preprocessor=cnn_app["preprocessor"],
+            )
+
+        train_ds = get_run_dataset("train")
+        val_ds = get_run_dataset("val")
+        test_ds = get_run_dataset("test")
 
         # Compile
         adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
@@ -254,9 +236,7 @@ class Trainer:
         )
 
         # Defining a file writer for confusion matrix logging
-        cm_file_writer = tf.summary.create_file_writer(
-            str(self.logs_dir / run_name / "cm")
-        )
+        cm_file_writer = tf.summary.create_file_writer(str(TB_DIR / run_name / "cm"))
 
         def log_confusion_matrix(epoch, logs):
             pred_y, true_y = [], []
@@ -289,7 +269,8 @@ class Trainer:
             callbacks=[
                 early_stopping_cb,
                 tf.keras.callbacks.TensorBoard(
-                    log_dir=self.logs_dir / run_name,
+                    # log_dir=self.logs_dir / run_name,
+                    log_dir=TB_DIR / run_name,
                     histogram_freq=1,
                     profile_batch=0,
                     # profile_batch=(10, 20),
@@ -301,7 +282,7 @@ class Trainer:
                 tf.keras.callbacks.ModelCheckpoint(
                     filepath=f"{checkpoints_run_dir}/{checkpoint_basename}.ckpt",
                     verbose=1,
-                    save_best_only=True,
+                    # save_best_only=True,
                     save_freq="epoch",
                 ),
                 # Weights Checkpoint
@@ -309,7 +290,7 @@ class Trainer:
                     filepath=f"{checkpoints_run_dir}/{checkpoint_basename}",
                     verbose=1,
                     save_weights_only=True,
-                    save_best_only=True,
+                    # save_best_only=True,
                     save_freq="epoch",
                 ),
             ],
@@ -345,9 +326,7 @@ class Trainer:
             )
             run_logs_dir = self.logs_dir / run_name
             self._set_run_log_file(run_logs_dir / f"{run_name}.log")
-            run_logs_file_writer = tf.summary.create_file_writer(
-                logdir=str(run_logs_dir)
-            )
+            run_logs_file_writer = tf.summary.create_file_writer(logdir=str(TB_DIR))
             with run_logs_file_writer.as_default():
                 hp.hparams(hparams)
                 with tf.distribute.MirroredStrategy().scope():
