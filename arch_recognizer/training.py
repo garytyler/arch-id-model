@@ -21,6 +21,7 @@ from tensorboard.plugins.hparams import api as hp
 BASE_DIR: Path = Path(__file__).parent.parent.absolute()
 SOURCE_DIR: Path = BASE_DIR / "dataset"
 OUTPUT_DIR: Path = BASE_DIR / "output"
+CHECKPOINTS_DIR: Path = OUTPUT_DIR / "checkpoints"
 
 run_log_formatter = logging.Formatter(
     fmt="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
@@ -49,21 +50,21 @@ class Trainer:
     run_loggers = [log]
 
     def __init__(self):
-        self.source_dir = SOURCE_DIR
-        self.output_dir = OUTPUT_DIR
-        self.checkpoints_dir: Path = self.output_dir / "checkpoints"
-        self.logs_dir: Path = self.output_dir / "logs"
+        # SOURCE_DIR = SOURCE_DIR
+        # OUTPUT_DIR = OUTPUT_DIR
+        # CHECKPOINTS_DIR: Path = OUTPUT_DIR / "checkpoints"
+        self.logs_dir: Path = OUTPUT_DIR / "logs"
         self.input_dir: Path = BASE_DIR / "input"
         # self.input_dir: tempfile.gettempdir()
 
-        if not self.source_dir.exists() or not list(self.source_dir.iterdir()):
+        if not SOURCE_DIR.exists() or not list(SOURCE_DIR.iterdir()):
             raise EnvironmentError(
                 "If running module directly, add source dataset to ./dataset "
                 "with structure root/classes/images"
             )
         self.dataset_total_count = reduce(
             operator.add,
-            (len(list(d.iterdir())) for d in self.source_dir.iterdir()),
+            (len(list(d.iterdir())) for d in SOURCE_DIR.iterdir()),
         )
 
         os.makedirs(self.input_dir, exist_ok=True)
@@ -170,7 +171,7 @@ class Trainer:
         )
 
     def get_checkpoints_run_dir(self, run_name) -> Path:
-        return self.checkpoints_dir / run_name
+        return CHECKPOINTS_DIR / run_name
 
     # Define training run function
     def _execute_run(self, hparams, run_name: str, max_epochs: int) -> Optional[float]:
@@ -344,7 +345,7 @@ class Trainer:
         training_runs = self._create_training_run_hyperparams()
 
         generate_dataset_splits(
-            src_dir=self.source_dir,
+            src_dir=SOURCE_DIR,
             dst_dir=self.input_dir,
             seed=self.seed,
             proportion=dataset_proportion,

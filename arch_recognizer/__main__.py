@@ -3,8 +3,6 @@ import sys
 from pathlib import Path
 
 import cnn
-import numpy as np
-import sklearn
 import tensorflow as tf
 import training
 
@@ -13,26 +11,31 @@ REPO_DIR = Path(__file__).parent.parent.absolute()
 
 def test(args):
     trainer = training.Trainer()
-    checkpoints_run_dir = trainer.get_checkpoints_run_dir(args.run_name)
-    latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
-    model = tf.keras.models.load_model(latest_checkpoint_path + ".ckpt")
-    cnn_app = cnn.CNN_APPS["InceptionResNetV2"]
-    test_ds = trainer.get_dataset(
-        split="test",
-        image_size=cnn_app["image_size"],
-        batch_size=cnn_app["batch_size"],
-        preprocessor=cnn_app["preprocessor"],
-    )
-    loss, accuracy = model.evaluate(test_ds)
-    print(f"Test loss: {loss}\nTest accuracy: {accuracy}")
 
-    pred_y, true_y = [], []
-    for batch_X, batch_y in test_ds:
-        true_y.extend(batch_y)
-        pred_y.extend(np.argmax(model.predict(batch_X), axis=-1))
-    # cm_data = np.nan_to_num(sklearn.metrics.confusion_matrix(true_y, pred_y))
+    def _get_run_checkpoints_dir():
+        for f in training.CHECKPOINTS_DIR.iterdir():
+            if f.name.startswith("run-"):
+                n = int(f.name.replace("run-", "")[0])
+            else:
+                n = int(f.name[0])
+            if n == args.run_number:
+                return Path(f)
 
-    print(sklearn.metrics.mean_absolute_percentage_error(true_y, pred_y))
+    run_checkpoints_dir = _get_run_checkpoints_dir()
+    if not run_checkpoints_dir:
+        print(f"run '{args.run_number}' not found")
+    else:
+        latest_checkpoint_path = tf.train.latest_checkpoint(run_checkpoints_dir)
+        model = tf.keras.models.load_model(f"{latest_checkpoint_path}.ckpt")
+        cnn_app = cnn.CNN_APPS["InceptionResNetV2"]
+        test_ds = trainer.get_dataset(
+            split="test",
+            image_size=cnn_app["image_size"],
+            batch_size=cnn_app["batch_size"],
+            preprocessor=cnn_app["preprocessor"],
+        )
+        loss, accuracy = model.evaluate(test_ds)
+        print(f"Test loss: {loss}\nTest accuracy: {accuracy}")
 
 
 def train(args):
@@ -65,13 +68,14 @@ if __name__ == "__main__":
     )
 
     # test command
-    parser_test = subparsers.add_parser("test", help="test model from file")
+    parser_test = subparsers.add_parser(
+        "test", help="evaluate a trained model with test data"
+    )
     parser_test.set_defaults(func=test)
     parser_test.add_argument(
-        # "model_path",
-        "run_name",
-        type=Path,
-        help="Path to the model file/directory",
+        "run_number",
+        type=int,
+        help="Run number of the model file/directory",
     )
 
     args = parser.parse_args(sys.argv[1:])
