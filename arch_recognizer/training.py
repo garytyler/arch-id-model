@@ -8,40 +8,25 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import numpy as np
+
+# BASE_DIR: Path = Path(__file__).parent.parent.absolute()
+# SOURCE_DIR: Path = BASE_DIR / "dataset"
+# OUTPUT_DIR: Path = BASE_DIR / "output"
+# CHECKPOINTS_DIR: Path = OUTPUT_DIR / "checkpoints"
+import settings
 import sklearn
 import sklearn.metrics
 import tensorboard
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from cnn import CNN_APPS
+from loggers import app_log_formatter
+from models import CNN_APPS
 from plotting import plot_confusion_matrix, plot_to_image
+from settings import BASE_DIR, CHECKPOINTS_DIR, OUTPUT_DIR, SOURCE_DIR
 from splitting import generate_dataset_splits
 from tensorboard.plugins.hparams import api as hp
 
-BASE_DIR: Path = Path(__file__).parent.parent.absolute()
-SOURCE_DIR: Path = BASE_DIR / "dataset"
-OUTPUT_DIR: Path = BASE_DIR / "output"
-CHECKPOINTS_DIR: Path = OUTPUT_DIR / "checkpoints"
-
-run_log_formatter = logging.Formatter(
-    fmt="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
-    datefmt=r"%Y-%m-%d %H:%M:%S",
-)
-# log_stream_handler.setFormatter(log_formatter)
-# logging.basicConfig(level=logging.INFO, handlers=[log_stream_handler])
-
-log_stream_handler = logging.StreamHandler()
-log = logging.getLogger(__name__)
-log.addHandler(log_stream_handler)
-
-# tensorflow_log_formatter = logging.Formatter(
-#     fmt="[%(asctime)s] {%(name)s} %(levelname)s - %(message)s",
-#     datefmt=r"%Y-%m-%d %H:%M:%S",
-# )
-# tensorflow_log = logging.getLogger("tensorflow")
-# tensorflow_log.setLevel(logging.ERROR)
-# tf_log = tf.get_logger()
-# tf_log.setLevel("ERROR")
+log = logging.getLogger(settings.APP_NAME)
 
 
 class Trainer:
@@ -81,7 +66,7 @@ class Trainer:
 
         os.makedirs(path.parent, exist_ok=True)
         self.run_log_file_handler = logging.FileHandler(path)
-        self.run_log_file_handler.setFormatter(run_log_formatter)
+        self.run_log_file_handler.setFormatter(app_log_formatter)
         self.run_log_file_handler.setLevel(level)
         for logger in self.run_loggers:
             logger.addHandler(self.run_log_file_handler)
