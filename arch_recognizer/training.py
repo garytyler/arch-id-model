@@ -277,7 +277,6 @@ class Trainer:
                 ),
                 tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end),
                 tf.keras.callbacks.experimental.BackupAndRestore(checkpoints_run_dir),
-                tf.keras.callbacks.ProgbarLogger(count_mode="samples"),
                 tf.keras.callbacks.EarlyStopping(
                     min_delta=0.0001,
                     patience=patience,
