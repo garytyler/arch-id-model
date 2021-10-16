@@ -38,7 +38,7 @@ def train(args):
     tf.config.run_functions_eagerly(args.eager)
     trainer = training.Trainer()
     trainer.train(
-        data_proportion=args.dataset_proportion,
+        data_proportion=args.data_proportion,
         max_epochs=args.max_epochs,
         profile=args.profile,
     )
