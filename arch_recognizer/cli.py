@@ -36,11 +36,26 @@ def get_parser():
         help="maximum epochs per run (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-p",
-        "--dataset-proportion",
+        "-d",
+        "--data-proportion",
         default=1.0,
         type=float,
-        help="proportion of dataset (default: %(default)s)",
+        help="proportion of dataset to use (default: %(default)s)",
+    )
+    parser_train.add_argument(
+        "-p",
+        "--profile",
+        default=False,
+        type=bool,
+        action="store_true",
+        help="enable performance profiling (default: %(default)s)",
+    )
+    parser_train.add_argument(
+        "--eager",
+        default=False,
+        type=bool,
+        action="store_true",
+        help="enable eager execution of tf.function calls (default: %(default)s)",
     )
 
     # test command

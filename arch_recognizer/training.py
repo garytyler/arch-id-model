@@ -36,7 +36,7 @@ class Trainer:
                 "If running module directly, add source dataset to ./dataset "
                 "with structure root/classes/images"
             )
-        self.dataset_total_count = reduce(
+        self.dataset_length = reduce(
             operator.add,
             (len(list(d.iterdir())) for d in DATASET_DIR.iterdir()),
         )
@@ -130,7 +130,8 @@ class Trainer:
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
             .shuffle(
-                buffer_size=self.dataset_total_count / 10,
+                buffer_size=self.dataset_length,
+                # buffer_size=1024,
                 seed=self.seed,
                 reshuffle_each_iteration=True,
             )
@@ -140,7 +141,9 @@ class Trainer:
         return CP_DIR / run_name
 
     # Define training run function
-    def _execute_run(self, run_name: str, max_epochs: int, hparams) -> Optional[float]:
+    def _execute_run(
+        self, run_name: str, max_epochs: int, hparams, profile: bool
+    ) -> Optional[float]:
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
 
         class_names = list([i.name for i in DATASET_DIR.iterdir()])
@@ -263,12 +266,14 @@ class Trainer:
             epochs=max_epochs,
             use_multiprocessing=True,
             initial_epoch=latest_epoch,
+            # steps_per_epoch=len(train_ds) // cnn_app["batch_size"],
+            # validation_steps=len(val_ds) // cnn_app["batch_size"],
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
                     log_dir=TB_LOGS_DIR / run_name,
                     histogram_freq=0,
-                    profile_batch=0,
                     write_graph=False,
+                    profile_batch=(2, 8) if profile else 0,
                 ),
                 tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end),
                 tf.keras.callbacks.experimental.BackupAndRestore(checkpoints_run_dir),
@@ -288,7 +293,7 @@ class Trainer:
         _, test_accuracy = model.evaluate(test_ds)
         return test_accuracy
 
-    def train(self, dataset_proportion: float, max_epochs: int):
+    def train(self, data_proportion: float, max_epochs: int, profile: bool):
         self._launch_tensorboard()
 
         training_runs = self._create_training_run_hyperparams()
@@ -297,7 +302,7 @@ class Trainer:
             src_dir=DATASET_DIR,
             dst_dir=self.splits_dir,
             seed=self.seed,
-            proportion=dataset_proportion,
+            proportion=data_proportion,
         )
 
         for run_num, hparams in enumerate(training_runs):
@@ -316,6 +321,7 @@ class Trainer:
                     run_name=run_name,
                     max_epochs=max_epochs,
                     hparams=hparams,
+                    profile=profile,
                 )
             with hparams_file_writer.as_default():
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)

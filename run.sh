@@ -31,5 +31,6 @@ docker run \
     --env "TF_FORCE_GPU_ALLOW_GROWTH=true" \
     --env "TF_GPU_THREAD_MODE=gpu_private" \
     --env "TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-2}" \
+    --env "TF_ENABLE_AUTO_MIXED_PRECISION=${TF_ENABLE_AUTO_MIXED_PRECISION:-1}" \
     --rm -- ${IMAGE_NAME} \
     /bin/bash -c "${RUN_COMMAND}"
