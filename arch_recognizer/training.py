@@ -3,26 +3,21 @@ import operator
 import os
 import sys
 import tempfile
+import uuid
 from functools import reduce
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import numpy as np
-
-# BASE_DIR: Path = Path(__file__).parent.parent.absolute()
-# SOURCE_DIR: Path = BASE_DIR / "dataset"
-# OUTPUT_DIR: Path = BASE_DIR / "output"
-# CHECKPOINTS_DIR: Path = OUTPUT_DIR / "checkpoints"
 import settings
 import sklearn
 import sklearn.metrics
 import tensorboard
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from loggers import app_log_formatter
 from models import CNN_APPS
 from plotting import plot_confusion_matrix, plot_to_image
-from settings import BASE_DIR, CHECKPOINTS_DIR, OUTPUT_DIR, SOURCE_DIR, TB_DIR
+from settings import APP_NAME, BASE_DIR, CHECKPOINTS_DIR, OUTPUT_DIR, SOURCE_DIR, TB_DIR
 from splitting import generate_dataset_splits
 from tensorboard.plugins.hparams import api as hp
 
@@ -41,6 +36,9 @@ class Trainer:
         self.logs_dir: Path = OUTPUT_DIR / "logs"
         self.input_dir: Path = BASE_DIR / "input"
         # self.input_dir: tempfile.gettempdir()
+        # self.input_dir: Path = Path(
+        #     BASE_DIR / f"input{str(uuid.uuid4()).replace('-','')[:4]}"
+        # )
 
         if not SOURCE_DIR.exists() or not list(SOURCE_DIR.iterdir()):
             raise EnvironmentError(
@@ -53,11 +51,6 @@ class Trainer:
         )
 
         os.makedirs(self.input_dir, exist_ok=True)
-        self.dataset_builder = tfds.ImageFolder(self.input_dir)
-        self.class_names = [
-            self.dataset_builder.info.features["label"].int2str(n)
-            for n in range(self.dataset_builder.info.features["label"].num_classes)
-        ]
 
     def _set_run_log_file(self, path, level=logging.INFO):
         for logger in self.run_loggers:
@@ -160,6 +153,7 @@ class Trainer:
     def _execute_run(self, hparams, run_name: str, max_epochs: int) -> Optional[float]:
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
 
+        num_classes = len(list(SOURCE_DIR.iterdir()))
         model = tf.keras.models.Sequential(
             [
                 tf.keras.layers.experimental.preprocessing.RandomFlip(
@@ -169,7 +163,7 @@ class Trainer:
                 cnn_app["class"](
                     include_top=False,
                     weights=hparams[self.hp_weights] or None,
-                    classes=len(self.class_names),
+                    classes=num_classes,
                 ),
                 tf.keras.layers.GlobalAveragePooling2D(),
                 tf.keras.layers.Dropout(0.1),
@@ -177,7 +171,9 @@ class Trainer:
                 tf.keras.layers.Dense(256, activation="relu"),
                 # tf.keras.layers.Dropout(0.1),
                 tf.keras.layers.Dense(
-                    len(self.class_names), activation="softmax", name="predictions"
+                    num_classes,
+                    activation="softmax",
+                    name="predictions",
                 ),
             ]
         )
@@ -194,7 +190,6 @@ class Trainer:
                 Path(latest_checkpoint_path).name.replace(f"{run_name}-", "")[:4]
             )
             if latest_epoch >= max_epochs:
-
                 log.info(
                     f"Skipping: {run_name}",
                     f"(max epochs completed, latest_epoch={latest_epoch})",
@@ -254,7 +249,6 @@ class Trainer:
         )
 
         early_stopping_cb = tf.keras.callbacks.EarlyStopping(
-            # monitor="val_accuracy",
             min_delta=0.0001,
             patience=50,
             restore_best_weights=True,
@@ -269,20 +263,17 @@ class Trainer:
             callbacks=[
                 early_stopping_cb,
                 tf.keras.callbacks.TensorBoard(
-                    # log_dir=self.logs_dir / run_name,
                     log_dir=TB_DIR / run_name,
                     histogram_freq=1,
                     profile_batch=0,
+                    write_images=True,
                     # profile_batch=(10, 20),
-                    # write_graph=True,
-                    # write_images=True,
                 ),
                 tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix),
                 # Model Checkpoint
                 tf.keras.callbacks.ModelCheckpoint(
                     filepath=f"{checkpoints_run_dir}/{checkpoint_basename}.ckpt",
                     verbose=1,
-                    # save_best_only=True,
                     save_freq="epoch",
                 ),
                 # Weights Checkpoint
@@ -290,7 +281,6 @@ class Trainer:
                     filepath=f"{checkpoints_run_dir}/{checkpoint_basename}",
                     verbose=1,
                     save_weights_only=True,
-                    # save_best_only=True,
                     save_freq="epoch",
                 ),
             ],
@@ -309,6 +299,12 @@ class Trainer:
         self._launch_tensorboard()
 
         training_runs = self._create_training_run_hyperparams()
+
+        # self.dataset_builder = tfds.ImageFolder(self.input_dir)
+        # list(SOURCE_DIR.iterdir()) = [
+        #     self.dataset_builder.info.features["label"].int2str(n)
+        #     for n in range(self.dataset_builder.info.features["label"].num_classes)
+        # ]
 
         generate_dataset_splits(
             src_dir=SOURCE_DIR,
