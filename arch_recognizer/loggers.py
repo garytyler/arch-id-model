@@ -43,4 +43,4 @@ def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, 
     tf_log.propagate = False  # https://stackoverflow.com/a/33664610
     tf_log.setLevel(tf_log_level)
     tf_log.addHandler(tf_log_stream_handler)
-    app_log.addHandler(session_log_file_handler)
+    tf_log.addHandler(session_log_file_handler)
