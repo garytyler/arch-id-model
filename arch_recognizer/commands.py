@@ -2,11 +2,11 @@ from pathlib import Path
 
 import tensorflow as tf
 
-from . import models, trainers
+from . import cnns, trainers
 
 
 def test(args):
-    trainer = trainers.Trainer()
+    trainer = trainers.TrainingSession()
 
     def _get_run_checkpoints_dir():
         for f in trainers.CP_DIR.iterdir():
@@ -23,7 +23,7 @@ def test(args):
     else:
         latest_checkpoint_path = tf.train.latest_checkpoint(run_checkpoints_dir)
         model = tf.keras.models.load_model(f"{latest_checkpoint_path}.ckpt")
-        cnn_app = models.CNN_APPS["InceptionResNetV2"]
+        cnn_app = cnns.CNN_APPS["InceptionResNetV2"]
         test_ds = trainer.get_dataset(
             split="test",
             image_size=cnn_app["image_size"],
@@ -38,7 +38,7 @@ def train(args):
     # Configure eager execution of tf.function calls
     tf.config.run_functions_eagerly(args.eager)
     # Start training
-    trainer = trainers.Trainer(
+    trainer = trainers.TrainingSession(
         data_proportion=args.data_proportion,
         max_epochs=args.max_epochs,
         profile=args.profile,
@@ -46,4 +46,4 @@ def train(args):
         test_freq=args.test_freq,
         patience=args.patience,
     )
-    trainer.train()
+    trainer.execute()

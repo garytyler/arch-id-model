@@ -9,8 +9,8 @@ import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
 from . import settings
+from .cnns import CNN_APPS
 from .loggers import app_log_formatter
-from .models import CNN_APPS
 from .runs import TrainingRun
 from .settings import APP_NAME, DATASET_DIR, PY_LOGS_DIR, SEED, TB_LOGS_DIR
 from .splitting import generate_dataset_splits
@@ -18,7 +18,7 @@ from .splitting import generate_dataset_splits
 log = logging.getLogger(settings.APP_NAME)
 
 
-class Trainer:
+class TrainingSession:
 
     run_loggers = [log]
 
@@ -85,7 +85,7 @@ class Trainer:
                     )
                     run_num += 1
 
-    def train(self):
+    def execute(self):
         self._launch_tensorboard()
 
         generate_dataset_splits(
