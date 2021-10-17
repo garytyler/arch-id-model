@@ -7,8 +7,8 @@ import settings
 import tensorflow as tf
 
 app_log_formatter = logging.Formatter(
-    fmt="[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
-    datefmt=settings.DATE_FORMAT,
+    fmt="[%(asctime)s.%(msecs)03d][%(name)s][%(levelname)s] %(message)s",
+    datefmt=settings.LOG_DATE_FORMAT,
 )
 
 
@@ -22,7 +22,7 @@ def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, 
 
     session_log_path = (
         settings.PY_LOGS_DIR
-        / f"{datetime.datetime.now().strftime(settings.DATE_FORMAT)}.log"
+        / f"{datetime.datetime.now().strftime(settings.TIMESTAMP_FORMAT)}.log"
     )
     session_log_path.parent.mkdir(parents=True, exist_ok=True)
     session_log_file_handler = logging.FileHandler(session_log_path)
