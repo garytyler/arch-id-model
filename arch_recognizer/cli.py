@@ -36,7 +36,7 @@ def get_parser():
         help="early stopping patience (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-s",
+        "-b",
         "--backup-freq",
         default=0,
         type=int,
@@ -45,7 +45,7 @@ def get_parser():
         "not sent to Tensorboard) (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-s",
+        "-t",
         "--test-freq",
         default=5,
         type=int,
