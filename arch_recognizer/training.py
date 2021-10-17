@@ -146,7 +146,7 @@ class Trainer:
         hparams,
         profile: bool,
         backup_freq: int,
-        test_freq: bool,
+        test_freq: int,
         patience: float,
     ) -> Optional[float]:
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
