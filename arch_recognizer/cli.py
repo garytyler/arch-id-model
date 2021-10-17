@@ -29,9 +29,23 @@ def get_parser():
     parser_train = subparsers.add_parser("train", help="train model")
     parser_train.set_defaults(func=commands.train)
     parser_train.add_argument(
+        "-p",
+        "--patience",
+        default=20,
+        type=float,
+        help="early stopping patience (default: %(default)s)",
+    )
+    parser_train.add_argument(
+        "-s",
+        "--backup-freq",
+        default=0,
+        type=int,
+        help="frequency of model backups in number of epochs (default: %(default)s)",
+    )
+    parser_train.add_argument(
         "-e",
         "--max-epochs",
-        default=100,
+        default=300,
         type=int,
         help="maximum epochs per run (default: %(default)s)",
     )
@@ -43,7 +57,6 @@ def get_parser():
         help="proportion of dataset to use (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-p",
         "--profile",
         action="store_true",
         help="enable performance profiling (default: %(default)s)",

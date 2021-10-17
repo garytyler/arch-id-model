@@ -140,7 +140,13 @@ class Trainer:
 
     # Define training run function
     def _execute_run(
-        self, run_name: str, max_epochs: int, hparams, profile: bool
+        self,
+        run_name: str,
+        max_epochs: int,
+        hparams,
+        profile: bool,
+        backup_freq: int,
+        patience: float,
     ) -> Optional[float]:
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
 
@@ -169,10 +175,7 @@ class Trainer:
             ]
         )
 
-        latest_epoch = 0
-        checkpoints_run_dir = self.get_checkpoints_run_dir(run_name)
-        # latest_checkpoint_path = tf.train.latest_checkpoint(checkpoints_run_dir)
-
+        # latest_epoch = 0
         completed_file_path = Path(PY_LOGS_DIR / run_name / "completed")
         run_status: dict = {}
         if completed_file_path.exists():
@@ -185,6 +188,14 @@ class Trainer:
         # Log model summary
         model.summary(print_fn=log.info)
 
+        # Compile
+        adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
+        model.compile(
+            optimizer=adam,
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            metrics=[self.metric_accuracy],
+        )
+
         def get_run_dataset(split: str) -> tf.data.Dataset:
             return self.get_dataset(
                 split,
@@ -196,14 +207,6 @@ class Trainer:
         train_ds = get_run_dataset("train")
         val_ds = get_run_dataset("val")
         test_ds = get_run_dataset("test")
-
-        # Compile
-        adam = tf.keras.optimizers.Adam(learning_rate=hparams[self.hp_learning_rate])
-        model.compile(
-            optimizer=adam,
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-            metrics=[self.metric_accuracy],
-        )
 
         # Define a file writer for confusion matrix logging
         cm_file_writer = tf.summary.create_file_writer(
@@ -224,20 +227,30 @@ class Trainer:
             with cm_file_writer.as_default():
                 tf.summary.image("Confusion Matrix", cm_image, step=epoch)
 
+        cp_run_dir = self.get_checkpoints_run_dir(run_name)
+
         def on_epoch_end(epoch, logs):
+            log.info(f"Epoch {epoch} done", logs)
             log_confusion_matrix(epoch, logs)
-            if (epoch > 0 and epoch % 5 == 0) or epoch == max_epochs:
+            if (
+                backup_freq and epoch > 0 and epoch % backup_freq
+            ) == 0 or epoch == max_epochs:
+                log.info("Evaluating model from test data...")
                 test_loss, test_accuracy = model.evaluate(test_ds)
                 log.info(
-                    f"epoch={epoch}, "
-                    f"test_loss={test_loss}, "
-                    f"test_accuracy={test_accuracy}"
+                    "Evaluation done...",
+                    {
+                        "epoch": epoch,
+                        "test_loss": test_loss,
+                        "test_accuracy": test_accuracy,
+                    },
                 )
                 with test_file_writer.as_default():
                     tf.summary.scalar("test_loss", test_loss, step=epoch)
                     tf.summary.scalar("test_accuracy", test_accuracy, step=epoch)
+                log.info("Saving model backup...")
                 model.save(
-                    filepath=CP_DIR
+                    filepath=cp_run_dir
                     / run_name
                     / f"{run_name}-{epoch}-{test_loss}-{test_accuracy}",
                     overwrite=True,
@@ -256,20 +269,15 @@ class Trainer:
                     f.write(json.dumps(run_status))
                 log.info(f"Completed training run: {reason}")
 
-        patience: float = 50
-
         model.fit(
             train_ds,
             validation_data=val_ds,
             epochs=max_epochs,
             use_multiprocessing=True,
-            initial_epoch=latest_epoch,
-            # steps_per_epoch=len(train_ds) // cnn_app["batch_size"],
-            # validation_steps=len(val_ds) // cnn_app["batch_size"],
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
                     log_dir=TB_LOGS_DIR / run_name,
-                    histogram_freq=10,
+                    histogram_freq=0,
                     update_freq="epoch",
                     write_graph=True,
                     write_images=True,
@@ -277,7 +285,7 @@ class Trainer:
                     profile_batch=(2, 8) if profile else 0,
                 ),
                 tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end),
-                tf.keras.callbacks.experimental.BackupAndRestore(checkpoints_run_dir),
+                tf.keras.callbacks.experimental.BackupAndRestore(cp_run_dir),
                 tf.keras.callbacks.EarlyStopping(
                     min_delta=0.0001,
                     patience=patience,
@@ -293,7 +301,14 @@ class Trainer:
         _, test_accuracy = model.evaluate(test_ds)
         return test_accuracy
 
-    def train(self, data_proportion: float, max_epochs: int, profile: bool):
+    def train(
+        self,
+        data_proportion: float,
+        max_epochs: int,
+        profile: bool,
+        backup_freq: int,
+        patience: float,
+    ):
         self._launch_tensorboard()
 
         training_runs = self._create_training_run_hyperparams()
@@ -322,6 +337,8 @@ class Trainer:
                     max_epochs=max_epochs,
                     hparams=hparams,
                     profile=profile,
+                    backup_freq=backup_freq,
+                    patience=patience,
                 )
             with hparams_file_writer.as_default():
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)

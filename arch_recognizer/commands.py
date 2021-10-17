@@ -43,4 +43,6 @@ def train(args):
         data_proportion=args.data_proportion,
         max_epochs=args.max_epochs,
         profile=args.profile,
+        backup_freq=args.backup_freq,
+        patience=args.patience,
     )
