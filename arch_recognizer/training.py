@@ -30,7 +30,6 @@ class Trainer:
     run_loggers = [log]
 
     def __init__(self):
-
         if not DATASET_DIR.exists() or not list(DATASET_DIR.iterdir()):
             raise EnvironmentError(
                 "If running module directly, add source dataset to ./dataset "
@@ -130,8 +129,7 @@ class Trainer:
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
             .shuffle(
-                buffer_size=self.dataset_length,
-                # buffer_size=1024,
+                buffer_size=1024,
                 seed=self.seed,
                 reshuffle_each_iteration=True,
             )
@@ -271,8 +269,11 @@ class Trainer:
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
                     log_dir=TB_LOGS_DIR / run_name,
-                    histogram_freq=0,
-                    write_graph=False,
+                    histogram_freq=10,
+                    update_freq="epoch",
+                    write_graph=True,
+                    write_images=True,
+                    write_steps_per_second=True,
                     profile_batch=(2, 8) if profile else 0,
                 ),
                 tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end),

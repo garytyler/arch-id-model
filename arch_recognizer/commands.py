@@ -35,7 +35,9 @@ def test(args):
 
 
 def train(args):
+    # Configure eager execution of tf.function calls
     tf.config.run_functions_eagerly(args.eager)
+    # Start training
     trainer = training.Trainer()
     trainer.train(
         data_proportion=args.data_proportion,
