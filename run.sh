@@ -3,11 +3,10 @@
 set -e
 
 THIS_DIR=$(realpath $(dirname $0))
-DATASET_SOURCE_DIR=$(realpath "${THIS_DIR}/dataset")
+LOCAL_DATASET_DIR=$(realpath "${THIS_DIR}/dataset")
+DATASET_SOURCE_DIR=${DATASET_SOURCE_DIR:-${LOCAL_DATASET_DIR}}
 
-if [[ -d "$1" ]]; then
-    DATASET_SOURCE_DIR=$(realpath "$1")
-elif [[ ! -d "$DATASET_SOURCE_DIR" ]]; then
+if [[ ! -d "$DATASET_SOURCE_DIR" ]]; then
     echo "Path to an existing source dataset is required as an argument. Dataset dir should have structure root/classes/images."
     exit
 fi
