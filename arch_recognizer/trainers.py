@@ -49,42 +49,41 @@ class Trainer:
         )
         self.metric_accuracy = "accuracy"
 
-        # Collect hyperparams
-        self.hparams = []
+        # Collect hyperparameter combinations and create training runs
+        run_num = 0
+        self.hparam_combinations = []
+        self.training_runs = []
         for cnn_model in self.hp_cnn_model.domain.values:
             for weights in self.hp_weights.domain.values:
                 for learning_rate in self.hp_learning_rate.domain.values:
-                    self.hparams.append(
+                    self.hparam_combinations.append(
                         {
                             self.hp_cnn_model: cnn_model,
                             self.hp_weights: weights,
                             self.hp_learning_rate: learning_rate,
                         }
                     )
-
-        # Create training runs
-        self.training_runs = []
-        for run_num, _hparams in enumerate(self.hparams):
-            self.training_runs.append(
-                TrainingRun(
-                    name=(
-                        f"run-{run_num}"
-                        f"-{cnn_model}"
-                        f"-{weights or 'none'}"
-                        f"-{learning_rate}"
-                    ),
-                    max_epochs=max_epochs,
-                    profile=profile,
-                    backup_freq=backup_freq,
-                    test_freq=test_freq,
-                    patience=patience,
-                    splits_dir=self.splits_dir,
-                    metrics=[self.metric_accuracy],
-                    cnn_model=_hparams[self.hp_cnn_model],
-                    weights=_hparams[self.hp_weights],
-                    learning_rate=_hparams[self.hp_learning_rate],
-                )
-            )
+                    self.training_runs.append(
+                        TrainingRun(
+                            name=(
+                                f"run-{run_num}"
+                                f"-{cnn_model}"
+                                f"-{weights or 'none'}"
+                                f"-{learning_rate}"
+                            ),
+                            max_epochs=max_epochs,
+                            profile=profile,
+                            backup_freq=backup_freq,
+                            test_freq=test_freq,
+                            patience=patience,
+                            splits_dir=self.splits_dir,
+                            metrics=[self.metric_accuracy],
+                            cnn_model=cnn_model,
+                            weights=weights,
+                            learning_rate=learning_rate,
+                        )
+                    )
+                    run_num += 1
 
     def train(self):
         self._launch_tensorboard()
@@ -104,7 +103,7 @@ class Trainer:
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 
-        for hparams, training_run in zip(self.hparams, self.training_runs):
+        for hparams, training_run in zip(self.hparam_combinations, self.training_runs):
             self._set_run_log_file(
                 PY_LOGS_DIR / training_run.name / f"{training_run.name}.log"
             )
