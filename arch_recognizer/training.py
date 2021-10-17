@@ -146,6 +146,7 @@ class Trainer:
         hparams,
         profile: bool,
         backup_freq: int,
+        test_freq: bool,
         patience: float,
     ) -> Optional[float]:
         cnn_app = CNN_APPS[hparams[self.hp_cnn_model]]
@@ -230,29 +231,45 @@ class Trainer:
         cp_run_dir = self.get_checkpoints_run_dir(run_name)
 
         def on_epoch_end(epoch, logs):
+
+            # Report epoch end
             log.info(f"Epoch {epoch} done", logs)
+
+            # Log confusion matrix
             log_confusion_matrix(epoch, logs)
-            if (
-                backup_freq and epoch > 0 and epoch % backup_freq
-            ) == 0 or epoch == max_epochs:
-                log.info("Evaluating model from test data...")
+
+            # Set task booleans
+            do_test = (
+                test_freq and epoch > 0 and epoch % test_freq == 0
+            ) or epoch == max_epochs
+            do_backup = (
+                backup_freq and epoch > 0 and epoch % backup_freq == 0
+            ) or epoch == max_epochs
+
+            # Test
+            if do_test or do_backup:
+                log.info("Evaluating model against test data...")
                 test_loss, test_accuracy = model.evaluate(test_ds)
-                log.info(
-                    "Evaluation done...",
-                    {
-                        "epoch": epoch,
-                        "test_loss": test_loss,
-                        "test_accuracy": test_accuracy,
-                    },
+                results = {
+                    "epoch": epoch,
+                    "test_loss": test_loss,
+                    "test_accuracy": test_accuracy,
+                }
+                log.info(f"Model evaluation results: {results}")
+                if not do_backup:
+                    with test_file_writer.as_default():
+                        tf.summary.scalar("test_loss", test_loss, step=epoch)
+                        tf.summary.scalar("test_accuracy", test_accuracy, step=epoch)
+                model_backup_path = (
+                    cp_run_dir
+                    / f"{run_name}-{epoch}-{test_loss:.4f}-{test_accuracy:.4f}"
                 )
-                with test_file_writer.as_default():
-                    tf.summary.scalar("test_loss", test_loss, step=epoch)
-                    tf.summary.scalar("test_accuracy", test_accuracy, step=epoch)
+
+            # Backup
+            if do_backup:
                 log.info("Saving model backup...")
                 model.save(
-                    filepath=cp_run_dir
-                    / run_name
-                    / f"{run_name}-{epoch}-{test_loss}-{test_accuracy}",
+                    filepath=model_backup_path,
                     overwrite=True,
                     include_optimizer=True,
                     save_format="tf",
@@ -262,12 +279,15 @@ class Trainer:
                     ),
                     save_traces=True,
                 )
+                log.info(f"Model backup saved: {model_backup_path.name}")
+
+            # Set completed file marker if max_epochs is reached
             if epoch >= max_epochs:
                 reason = f"max epochs reached ({epoch})"
                 run_status.update({"reason": reason})
                 with open(completed_file_path, "w") as f:
                     f.write(json.dumps(run_status))
-                log.info(f"Completed training run: {reason}")
+                log.info(f"Training run complete: {reason}")
 
         model.fit(
             train_ds,
@@ -307,6 +327,7 @@ class Trainer:
         max_epochs: int,
         profile: bool,
         backup_freq: int,
+        test_freq: int,
         patience: float,
     ):
         self._launch_tensorboard()
@@ -338,6 +359,7 @@ class Trainer:
                     hparams=hparams,
                     profile=profile,
                     backup_freq=backup_freq,
+                    test_freq=test_freq,
                     patience=patience,
                 )
             with hparams_file_writer.as_default():

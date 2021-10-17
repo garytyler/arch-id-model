@@ -40,7 +40,17 @@ def get_parser():
         "--backup-freq",
         default=0,
         type=int,
-        help="frequency of model backups in number of epochs (default: %(default)s)",
+        help="frequency of model backups in number of epochs (model will first be "
+        "evaluated against test data and results will be included in the file name but "
+        "not sent to Tensorboard) (default: %(default)s)",
+    )
+    parser_train.add_argument(
+        "-s",
+        "--test-freq",
+        default=0,
+        type=int,
+        help="frequency to evaluate model against test data in number of epochs "
+        "(default: %(default)s)",
     )
     parser_train.add_argument(
         "-e",
