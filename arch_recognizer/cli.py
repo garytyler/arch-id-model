@@ -47,7 +47,7 @@ def get_parser():
     parser_train.add_argument(
         "-s",
         "--test-freq",
-        default=0,
+        default=5,
         type=int,
         help="frequency to evaluate model against test data in number of epochs "
         "(default: %(default)s)",
