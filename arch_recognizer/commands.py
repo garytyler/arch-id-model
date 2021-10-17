@@ -2,14 +2,14 @@ from pathlib import Path
 
 import models
 import tensorflow as tf
-import training
+import trainers
 
 
 def test(args):
-    trainer = training.Trainer()
+    trainer = trainers.Trainer()
 
     def _get_run_checkpoints_dir():
-        for f in training.CP_DIR.iterdir():
+        for f in trainers.CP_DIR.iterdir():
             if f.name.startswith("run-"):
                 n = int(f.name.replace("run-", "")[0])
             else:
@@ -37,8 +37,8 @@ def test(args):
 def train(args):
     # Configure eager execution of tf.function calls
     tf.config.run_functions_eagerly(args.eager)
-    # Start training
-    trainer = training.Trainer()
+    # Start trainers
+    trainer = trainers.Trainer()
     trainer.train(
         data_proportion=args.data_proportion,
         max_epochs=args.max_epochs,

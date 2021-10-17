@@ -1,7 +1,5 @@
 import io
 import itertools
-from functools import wraps
-from time import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,7 +8,8 @@ import tensorflow as tf
 
 def plot_to_image(figure):
     """Converts the matplotlib plot specified by 'figure' to a PNG image and
-    returns it. The supplied figure is closed and inaccessible after this call."""
+    returns it. The supplied figure is closed and inaccessible after this call.
+    """
     # Save the plot to a PNG in memory.
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
@@ -26,8 +25,7 @@ def plot_to_image(figure):
 
 
 def plot_confusion_matrix(cm, class_names):
-    """
-    Returns a matplotlib figure containing the plotted confusion matrix.
+    """Returns a matplotlib figure containing the plotted confusion matrix.
 
     Args:
         cm (array, shape = [n, n]): a confusion matrix of integer classes

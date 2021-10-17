@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+# See: https://keras.io/api/applications/
+
 CNN_APPS = {
     # tf.keras.applications.VGG19.__name__: {
     #     "image_size": (224, 224),
