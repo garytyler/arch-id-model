@@ -4,11 +4,11 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import settings
 import tensorboard
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
+from . import settings
 from .loggers import app_log_formatter
 from .models import CNN_APPS
 from .runs import TrainingRun

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import sys
 from pathlib import Path
 
@@ -5,8 +7,7 @@ REPO_DIR = Path(__file__).parent.parent.absolute()
 
 
 def main():
-    import cli
-    import loggers
+    from . import cli, loggers
 
     parser = cli.get_parser()
     args = parser.parse_args(sys.argv[1:])

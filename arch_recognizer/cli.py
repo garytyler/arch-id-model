@@ -1,6 +1,6 @@
 import argparse
 
-import commands
+from . import commands
 
 
 def get_parser():

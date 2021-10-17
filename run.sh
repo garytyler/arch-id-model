@@ -18,7 +18,7 @@ docker build \
     --build-arg="USER=$(whoami)" \
     -- ${THIS_DIR}/
 
-RUN_COMMAND="python /workspace/arch_recognizer $@"
+RUN_COMMAND="python -m arch_recognizer $@"
 docker run \
     --runtime=nvidia \
     --publish=6006:6006 \

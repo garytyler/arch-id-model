@@ -4,13 +4,14 @@ from pathlib import Path
 from typing import Callable, List, Tuple
 
 import numpy as np
-import settings
 import sklearn
 import sklearn.metrics
 import tensorflow as tf
-from models import CNN_APPS
-from plotting import plot_confusion_matrix, plot_to_image
-from settings import CP_DIR, DATASET_DIR, PY_LOGS_DIR, SEED, TB_LOGS_DIR
+
+from . import settings
+from .models import CNN_APPS
+from .plotting import plot_confusion_matrix, plot_to_image
+from .settings import CP_DIR, DATASET_DIR, PY_LOGS_DIR, SEED, TB_LOGS_DIR
 
 log = logging.getLogger(settings.APP_NAME)
 
@@ -56,7 +57,7 @@ class TrainingRun:
                     "horizontal", input_shape=(*self.image_size, 3)
                 ),
                 tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-                self.cnn_app_model_class(
+                self.cnn_app_model(
                     include_top=False,
                     weights=self.weights or None,
                     classes=len(class_names),

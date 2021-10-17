@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import models
 import tensorflow as tf
-import trainers
+
+from . import models, trainers
 
 
 def test(args):
@@ -38,8 +38,7 @@ def train(args):
     # Configure eager execution of tf.function calls
     tf.config.run_functions_eagerly(args.eager)
     # Start trainers
-    trainer = trainers.Trainer()
-    trainer.train(
+    trainer = trainers.Trainer(
         data_proportion=args.data_proportion,
         max_epochs=args.max_epochs,
         profile=args.profile,
@@ -47,3 +46,4 @@ def train(args):
         test_freq=args.test_freq,
         patience=args.patience,
     )
+    trainer.train()

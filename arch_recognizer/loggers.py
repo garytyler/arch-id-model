@@ -3,8 +3,9 @@ import logging
 import sys
 from typing import Union
 
-import settings
 import tensorflow as tf
+
+from . import settings
 
 app_log_formatter = logging.Formatter(
     fmt="[%(asctime)s.%(msecs)03d][%(name)s][%(levelname)s] %(message)s",
