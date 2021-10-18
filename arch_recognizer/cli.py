@@ -1,10 +1,11 @@
 import argparse
+from pathlib import Path
 
 from . import commands
+from .settings import BASE_DIR
 
 
 def get_parser():
-
     # top-level parser
     parser = argparse.ArgumentParser(prog="arch_recognizer")
     parser.add_argument(
@@ -28,6 +29,21 @@ def get_parser():
     # train command
     parser_train = subparsers.add_parser("train", help="train model")
     parser_train.set_defaults(func=commands.train)
+    parser_train.add_argument(
+        "-r",
+        "--resume",
+        const=-1,
+        nargs="?",
+        type=int,
+        help="resume last session or specified session (default: %(default)s)",
+    )
+    parser_train.add_argument(
+        "-o",
+        "--output-dir",
+        default=BASE_DIR / "output",
+        type=Path,
+        help="base directory for output from all sessions (default: %(default)s)",
+    )
     parser_train.add_argument(
         "-p",
         "--patience",
@@ -76,16 +92,21 @@ def get_parser():
         action="store_true",
         help="enable eager execution of tf.function calls (default: %(default)s)",
     )
+    parser_train.add_argument(
+        "--force-resume-session",
+        action="store_true",
+        help="skip comparing commit hash when using -r/--resume (default: %(default)s)",
+    )
 
-    # test command
-    parser_test = subparsers.add_parser(
-        "test", help="evaluate a trained model with test data"
-    )
-    parser_test.set_defaults(func=commands.test)
-    parser_test.add_argument(
-        "run_number",
-        type=int,
-        help="run number of the model file/directory",
-    )
+    # # test command
+    # parser_test = subparsers.add_parser(
+    #     "test", help="evaluate a trained model with test data"
+    # )
+    # parser_test.set_defaults(func=commands.test)
+    # parser_test.add_argument(
+    #     "run_number",
+    #     type=int,
+    #     help="run number of the model file/directory",
+    # )
 
     return parser

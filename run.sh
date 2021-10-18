@@ -2,6 +2,7 @@
 
 set -e
 
+echo $@
 THIS_DIR=$(realpath $(dirname $0))
 LOCAL_DATASET_DIR=$(realpath "${THIS_DIR}/dataset")
 DATASET_SOURCE_DIR=${DATASET_SOURCE_DIR:-${LOCAL_DATASET_DIR}}
@@ -10,6 +11,13 @@ if [[ ! -d "$DATASET_SOURCE_DIR" ]]; then
     echo "Path to an existing source dataset is required as an argument. Dataset dir should have structure root/classes/images."
     exit
 fi
+
+# if [ "$(git status -s -uall)" ]; then
+#     echo "Changes found in directory. Please stash or commit changes before running script."
+#     exit
+# else
+#     CURRENT_COMMIT_HASH=$(git rev-parse --verify HEAD)
+# fi
 
 IMAGE_NAME=arch-recognizer/trainings
 docker build \

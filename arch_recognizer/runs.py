@@ -11,7 +11,7 @@ import tensorflow as tf
 from . import settings
 from .cnns import CNN_APPS
 from .plotting import plot_confusion_matrix, plot_to_image
-from .settings import CP_DIR, DATASET_DIR, PY_LOGS_DIR, SEED, TB_LOGS_DIR
+from .settings import DATASET_DIR, SEED
 
 log = logging.getLogger(settings.APP_NAME)
 
@@ -30,6 +30,7 @@ class TrainingRun:
         learning_rate: float,
         metrics: List[str],
         splits_dir: Path,
+        logs_dir: Path,
     ):
         # Define given instance attributes
         self.name: str = name
@@ -44,6 +45,12 @@ class TrainingRun:
         self.metrics: List[str] = metrics
         self.splits_dir: Path = splits_dir
 
+        # Set logs dir paths
+        self.cp_dir: Path = logs_dir / "cp"
+        self.py_dir: Path = logs_dir / "py"
+        self.tb_dir: Path = logs_dir / "tb"
+        self.completed_marker_path = Path(logs_dir / "completed")
+
         # Get attributes from keras cnn app
         cnn_app = CNN_APPS[self.cnn_model]
         self.cnn_app_model: Callable = cnn_app["class"]
@@ -55,24 +62,20 @@ class TrainingRun:
         # Define training dependencies
         #
 
-        # Directory to store checkpoints
-        self.checkpoints_dir = CP_DIR / self.name
-        self.completed_marker_path = Path(PY_LOGS_DIR / self.name / "completed")
-
         # List of class names
         self.class_names = list([i.name for i in DATASET_DIR.iterdir()])
 
         # File writer for writing confusion matrix plots
-        self.cm_file_writer = tf.summary.create_file_writer(
-            str(TB_LOGS_DIR / self.name / "cm")
-        )
+        self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
 
         # File writer for writing evaluations against test data
-        self.test_file_writer = tf.summary.create_file_writer(
-            str(TB_LOGS_DIR / self.name / "test")
-        )
+        self.test_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "test"))
 
     def execute(self) -> float:
+        self.cp_dir.mkdir(parents=True, exist_ok=True)
+        self.py_dir.mkdir(parents=True, exist_ok=True)
+        self.tb_dir.mkdir(parents=True, exist_ok=True)
+
         self.run_status: dict = {}
         if self.completed_marker_path.exists():
             with open(self.completed_marker_path, "r") as f:
@@ -131,7 +134,7 @@ class TrainingRun:
             use_multiprocessing=True,
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
-                    log_dir=TB_LOGS_DIR / self.name,
+                    log_dir=self.tb_dir / self.name,
                     histogram_freq=0,
                     update_freq="epoch",
                     write_graph=True,
@@ -144,7 +147,7 @@ class TrainingRun:
                     on_epoch_end=self._on_epoch_end,
                     on_training_end=self._on_training_end,
                 ),
-                tf.keras.callbacks.experimental.BackupAndRestore(self.checkpoints_dir),
+                tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
                     min_delta=0.0001,
                     patience=self.patience,
@@ -236,8 +239,7 @@ class TrainingRun:
                 write_to_tensorboard=do_test,
             )
             model_backup_path = (
-                self.checkpoints_dir
-                / f"{self.name}-{epoch}-{test_loss:.4f}-{test_accuracy:.4f}"
+                self.cp_dir / f"{self.name}-{epoch}-{test_loss:.4f}-{test_accuracy:.4f}"
             )
         # Backup
         if do_backup:

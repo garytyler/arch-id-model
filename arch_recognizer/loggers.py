@@ -1,19 +1,22 @@
 import datetime
 import logging
 import sys
+from pathlib import Path
 from typing import Union
 
 import tensorflow as tf
 
-from . import settings
+from .settings import APP_NAME, TIMESTAMP_FORMAT
 
 app_log_formatter = logging.Formatter(
     fmt="[%(asctime)s.%(msecs)03d][%(name)s][%(levelname)s] %(message)s",
-    datefmt=settings.LOG_DATE_FORMAT,
+    datefmt=TIMESTAMP_FORMAT,
 )
 
 
-def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, int]):
+def initialize_session_loggers(
+    logs_dir: Path, app_log_level: Union[str, int], tf_log_level: Union[str, int]
+):
     app_log_level = (
         app_log_level.upper() if isinstance(app_log_level, str) else app_log_level
     )
@@ -22,8 +25,7 @@ def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, 
     )
 
     session_log_path = (
-        settings.PY_LOGS_DIR
-        / f"{datetime.datetime.now().strftime(settings.TIMESTAMP_FORMAT)}.log"
+        logs_dir / f"{datetime.datetime.now().strftime(TIMESTAMP_FORMAT)}.log"
     )
     session_log_path.parent.mkdir(parents=True, exist_ok=True)
     session_log_file_handler = logging.FileHandler(session_log_path)
@@ -31,7 +33,7 @@ def initialize_loggers(app_log_level: Union[str, int], tf_log_level: Union[str, 
     # Configure arch-recognizer logger
     app_log_stream_handler = logging.StreamHandler(sys.stdout)
     app_log_stream_handler.setFormatter(app_log_formatter)
-    app_log = logging.getLogger(settings.APP_NAME)
+    app_log = logging.getLogger(APP_NAME)
     app_log.propagate = False  # https://stackoverflow.com/a/33664610
     app_log.setLevel(app_log_level)
     app_log.addHandler(app_log_stream_handler)

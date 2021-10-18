@@ -7,17 +7,13 @@ REPO_DIR = Path(__file__).parent.parent.absolute()
 
 
 def main():
-    from . import cli, loggers
+    from . import cli
 
     parser = cli.get_parser()
     args = parser.parse_args(sys.argv[1:])
     if getattr(args, "func", None) is None:
         parser.print_help()
     else:
-        loggers.initialize_loggers(
-            app_log_level=args.log_level,
-            tf_log_level=args.tf_log_level,
-        )
         args.func(args)
 
 
