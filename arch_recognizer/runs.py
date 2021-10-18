@@ -30,7 +30,9 @@ class TrainingRun:
         learning_rate: float,
         metrics: List[str],
         splits_dir: Path,
-        logs_dir: Path,
+        cp_dir: Path,
+        py_dir: Path,
+        tb_dir: Path,
     ):
         # Set received instance attributes
         self.name: str = name
@@ -46,10 +48,10 @@ class TrainingRun:
         self.splits_dir: Path = splits_dir
 
         # Set logs dir paths
-        self.cp_dir: Path = logs_dir / "cp"
-        self.py_dir: Path = logs_dir / "py"
-        self.tb_dir: Path = logs_dir / "tb"
-        self.completed_marker_path = Path(logs_dir / "completed")
+        self.cp_dir: Path = cp_dir
+        self.py_dir: Path = py_dir
+        self.tb_dir: Path = tb_dir
+        self.completed_marker_path = Path(self.py_dir / "completed")
 
         # Get attributes from keras cnn app
         cnn_app = CNN_APPS[self.cnn_model]

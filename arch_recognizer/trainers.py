@@ -34,6 +34,9 @@ class TrainingSession:
         patience: float,
     ):
         self.session_dir = session_dir
+        self.session_cp_dir = self.session_dir / "cp"
+        self.session_py_dir = self.session_dir / "py"
+        self.session_tb_dir = self.session_dir / "tb"
 
         self.data_proportion = data_proportion
 
@@ -87,7 +90,9 @@ class TrainingSession:
                             cnn_model=cnn_model,
                             weights=weights,
                             learning_rate=learning_rate,
-                            logs_dir=self.session_dir / run_name,
+                            cp_dir=self.session_cp_dir / run_name,
+                            py_dir=self.session_py_dir / run_name,
+                            tb_dir=self.session_tb_dir / run_name,
                         )
                     )
                     run_num += 1
@@ -139,6 +144,6 @@ class TrainingSession:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        tb.configure(argv=[None, f"--logdir={self.session_dir}", "--bind_all"])
+        tb.configure(argv=[None, f"--logdir={self.session_tb_dir}", "--bind_all"])
         url = tb.launch()
         log.info(f"Tensorflow listening on {url}")
