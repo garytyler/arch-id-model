@@ -32,7 +32,7 @@ class TrainingRun:
         splits_dir: Path,
         logs_dir: Path,
     ):
-        # Define given instance attributes
+        # Set received instance attributes
         self.name: str = name
         self.max_epochs: int = max_epochs
         self.profile: bool = profile
@@ -58,31 +58,35 @@ class TrainingRun:
         self.image_size: Tuple[int] = cnn_app["image_size"]
         self.batch_size: int = cnn_app["batch_size"]
 
-        #
-        # Define training dependencies
-        #
-
-        # List of class names
+        # Set other attributes
+        self.run_status: dict = {}
         self.class_names = list([i.name for i in DATASET_DIR.iterdir()])
 
-        # File writer for writing confusion matrix plots
-        self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
+    def is_completed(self) -> bool:
+        if not self.completed_marker_path.exists():
+            return False
 
-        # File writer for writing evaluations against test data
-        self.test_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "test"))
+        with open(self.completed_marker_path, "r") as f:
+            self.run_status = json.loads(f.read())
+
+        reason = self.run_status.get("reason")
+        if reason == "early_stopped":
+            return all(
+                (
+                    self.max_epochs <= self.run_status.get("epoch", 0),
+                    self.patience <= self.run_status.get("patience", 0),
+                )
+            )
+        elif reason == "max_epochs":
+            return self.max_epochs <= self.run_status.get("epoch", 0)
+        else:
+            return False
 
     def execute(self) -> float:
+        # Create log dirs
         self.cp_dir.mkdir(parents=True, exist_ok=True)
         self.py_dir.mkdir(parents=True, exist_ok=True)
         self.tb_dir.mkdir(parents=True, exist_ok=True)
-
-        self.run_status: dict = {}
-        if self.completed_marker_path.exists():
-            with open(self.completed_marker_path, "r") as f:
-                self.run_status = json.loads(f.read())
-        else:
-            with open(self.completed_marker_path, "w") as f:
-                f.write(json.dumps(self.run_status))
 
         # Create Model
         self.model = tf.keras.models.Sequential(
@@ -125,6 +129,12 @@ class TrainingRun:
         self.train_ds = self._get_dataset("train")
         self.val_ds = self._get_dataset("val")
         self.test_ds = self._get_dataset("test")
+
+        # File writer for writing confusion matrix plots
+        self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
+
+        # File writer for writing evaluations against test data
+        self.test_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "test"))
 
         # Train
         self.model.fit(
@@ -205,11 +215,19 @@ class TrainingRun:
     def _on_training_end(self, epoch, logs):
         if not self.completed_marker_path.exists():
             with open(self.completed_marker_path, "w") as f:
-                f.write(json.dumps({"reason": f"early stopped {self.patience}"}))
+                f.write(
+                    json.dumps(
+                        {
+                            "reason": "early_stopped",
+                            "patience": self.patience,
+                            "epoch": epoch,
+                        }
+                    )
+                )
         # Set completed file marker if max_epochs is reached
         if epoch >= self.max_epochs:
             reason = f"max epochs reached ({epoch})"
-            self.run_status.update({"reason": reason})
+            self.run_status.update({"reason": "max_epochs", "epoch": epoch})
             with open(self.completed_marker_path, "w") as f:
                 f.write(json.dumps(self.run_status))
             log.info(f"Training run done: {reason}")

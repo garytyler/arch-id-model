@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from typing import List
 
 import tensorboard
 import tensorflow as tf
@@ -14,9 +15,6 @@ from .loggers import app_log_formatter
 from .runs import TrainingRun
 from .settings import APP_NAME, DATASET_DIR, SEED
 from .splitting import generate_dataset_splits
-
-# from output import get_session_output_dir_name
-
 
 log = logging.getLogger(settings.APP_NAME)
 
@@ -36,9 +34,6 @@ class TrainingSession:
         patience: float,
     ):
         self.session_dir = session_dir
-        self.cp_dir: Path = self.session_dir / "cp"
-        self.py_dir: Path = self.session_dir / "py"
-        self.tb_dir: Path = self.session_dir / "tb"
 
         self.data_proportion = data_proportion
 
@@ -73,7 +68,8 @@ class TrainingSession:
                         }
                     )
                     run_name = (
-                        f"run-{run_num}"
+                        f"{self.session_dir.name}"
+                        f"-{run_num}"
                         f"-{cnn_model}"
                         f"-{weights or 'none'}"
                         f"-{learning_rate}"
@@ -97,8 +93,6 @@ class TrainingSession:
                     run_num += 1
 
     def execute(self):
-        self._launch_tensorboard()
-
         generate_dataset_splits(
             src_dir=DATASET_DIR,
             dst_dir=self.splits_dir,
@@ -106,24 +100,25 @@ class TrainingSession:
             proportion=self.data_proportion,
         )
 
-        with tf.summary.create_file_writer(
-            str(self.tb_dir / "hparam_tuning")
-        ).as_default():
+        hparams_tuning_dir = self.session_dir / "hparam_tuning"
+        with tf.summary.create_file_writer(str(hparams_tuning_dir)).as_default():
             hp.hparams_config(
                 hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 
+        self._launch_tensorboard()
         for hparams, training_run in zip(self.hparam_combinations, self.training_runs):
-            self._set_run_log_file(
-                self.py_dir / training_run.name / f"{training_run.name}.log"
+            self._set_run_log_file(training_run.py_dir / f"{training_run.name}.log")
+            hparams_file_writer = tf.summary.create_file_writer(
+                str(training_run.tb_dir)
             )
-            hparams_file_writer = tf.summary.create_file_writer(str(self.tb_dir))
             with hparams_file_writer.as_default():
                 hp.hparams(hparams)
 
-            with tf.distribute.MirroredStrategy().scope():
-                accuracy = training_run.execute()
+            if not training_run.is_completed():
+                with tf.distribute.MirroredStrategy().scope():
+                    accuracy = training_run.execute()
 
             with hparams_file_writer.as_default():
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
@@ -144,10 +139,6 @@ class TrainingSession:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        x = f"\"{','.join(str(r.tb_dir) for r in self.training_runs)}\""
-        # x = f"\"{','.join(str(i) for i in self.tb_dir.iterdir())}\""
-        # print(x)
-        tb.configure(argv=[None, f"--logdir={x}", "--bind_all"])
-        # tb.configure(argv=[None, f"--logdir={self.tb_dir}", "--bind_all"])
+        tb.configure(argv=[None, f"--logdir={self.session_dir}", "--bind_all"])
         url = tb.launch()
         log.info(f"Tensorflow listening on {url}")
