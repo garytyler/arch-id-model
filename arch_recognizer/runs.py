@@ -63,6 +63,10 @@ class TrainingRun:
         # Set other attributes
         self.run_status: dict = {}
         self.class_names = list([i.name for i in DATASET_DIR.iterdir()])
+        # File writer for writing confusion matrix plots
+        self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
+        # File writer for writing evaluations against test data
+        self.test_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "test"))
 
     def is_completed(self) -> bool:
         if not self.completed_marker_path.exists():
@@ -132,12 +136,6 @@ class TrainingRun:
         self.val_ds = self._get_dataset("val")
         self.test_ds = self._get_dataset("test")
 
-        # File writer for writing confusion matrix plots
-        self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
-
-        # File writer for writing evaluations against test data
-        self.test_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "test"))
-
         # Train
         self.model.fit(
             self.train_ds,
@@ -146,7 +144,7 @@ class TrainingRun:
             use_multiprocessing=True,
             callbacks=[
                 tf.keras.callbacks.TensorBoard(
-                    log_dir=self.tb_dir / self.name,
+                    log_dir=self.tb_dir,
                     histogram_freq=0,
                     update_freq="epoch",
                     write_graph=True,
@@ -237,7 +235,7 @@ class TrainingRun:
     def _on_epoch_start(self, epoch, logs=None):
         log.info(f"Training {self.name} at epoch {epoch}...")
 
-    def _on_epoch_end(self, epoch, logs):
+    def _on_epoch_end(self, epoch, logs=None):
         # Report epoch end
         log.info(f"Epoch {epoch} done: {logs}")
 

@@ -3,7 +3,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import List
 
 import tensorboard
 import tensorflow as tf
@@ -25,7 +24,7 @@ class TrainingSession:
 
     def __init__(
         self,
-        session_dir: Path,
+        dir: Path,
         data_proportion: float,
         max_epochs: int,
         profile: bool,
@@ -33,10 +32,13 @@ class TrainingSession:
         test_freq: int,
         patience: float,
     ):
-        self.session_dir = session_dir
-        self.session_cp_dir = self.session_dir / "cp"
-        self.session_py_dir = self.session_dir / "py"
-        self.session_tb_dir = self.session_dir / "tb"
+        self.dir = dir
+        self.cp_dir = self.dir / "cp"
+        self.cp_dir.mkdir(parents=True, exist_ok=True)
+        self.py_dir = self.dir / "py"
+        self.py_dir.mkdir(parents=True, exist_ok=True)
+        self.tb_dir = self.dir / "tb"
+        self.tb_dir.mkdir(parents=True, exist_ok=True)
 
         self.data_proportion = data_proportion
 
@@ -71,7 +73,7 @@ class TrainingSession:
                         }
                     )
                     run_name = (
-                        f"{self.session_dir.name}"
+                        f"{self.dir.name}"
                         f"-{run_num}"
                         f"-{cnn_model}"
                         f"-{weights or 'none'}"
@@ -90,14 +92,16 @@ class TrainingSession:
                             cnn_model=cnn_model,
                             weights=weights,
                             learning_rate=learning_rate,
-                            cp_dir=self.session_cp_dir / run_name,
-                            py_dir=self.session_py_dir / run_name,
-                            tb_dir=self.session_tb_dir / run_name,
+                            cp_dir=self.cp_dir / run_name,
+                            py_dir=self.py_dir / run_name,
+                            tb_dir=self.tb_dir / run_name,
                         )
                     )
                     run_num += 1
 
     def execute(self):
+        self._launch_tensorboard()
+
         generate_dataset_splits(
             src_dir=DATASET_DIR,
             dst_dir=self.splits_dir,
@@ -105,19 +109,17 @@ class TrainingSession:
             proportion=self.data_proportion,
         )
 
-        hparams_tuning_dir = self.session_dir / "hparam_tuning"
-        with tf.summary.create_file_writer(str(hparams_tuning_dir)).as_default():
+        with tf.summary.create_file_writer(
+            str(self.tb_dir / "hparam_tuning")
+        ).as_default():
             hp.hparams_config(
                 hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 
-        self._launch_tensorboard()
         for hparams, training_run in zip(self.hparam_combinations, self.training_runs):
             self._set_run_log_file(training_run.py_dir / f"{training_run.name}.log")
-            hparams_file_writer = tf.summary.create_file_writer(
-                str(training_run.tb_dir)
-            )
+            hparams_file_writer = tf.summary.create_file_writer(str(self.tb_dir))
             with hparams_file_writer.as_default():
                 hp.hparams(hparams)
 
@@ -144,6 +146,6 @@ class TrainingSession:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        tb.configure(argv=[None, f"--logdir={self.session_tb_dir}", "--bind_all"])
+        tb.configure(argv=[None, f"--logdir={str(self.tb_dir)}", "--bind_all"])
         url = tb.launch()
         log.info(f"Tensorflow listening on {url}")

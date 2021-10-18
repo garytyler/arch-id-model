@@ -6,7 +6,7 @@ from typing import List
 
 import tensorflow as tf
 
-from . import cnns, trainers
+from . import cnns, sessions
 
 # from .changes import get_current_commit
 from .loggers import initialize_session_loggers
@@ -16,10 +16,10 @@ log = logging.getLogger(APP_NAME)
 
 
 def test(args):
-    trainer = trainers.TrainingSession()
+    trainer = sessions.TrainingSession()
 
     def _get_run_checkpoints_dir():
-        for f in trainers.CP_DIR.iterdir():
+        for f in sessions.CP_DIR.iterdir():
             if f.name.startswith("run-"):
                 n = int(f.name.replace("run-", "")[0])
             else:
@@ -60,8 +60,8 @@ def train(args):
     tf.config.run_functions_eagerly(args.eager)
 
     # Start training
-    trainer = trainers.TrainingSession(
-        session_dir=session_dir,
+    trainer = sessions.TrainingSession(
+        dir=session_dir,
         data_proportion=args.data_proportion,
         max_epochs=args.max_epochs,
         profile=args.profile,
@@ -89,7 +89,7 @@ def _get_session_dir(output_dir: Path, resume: str, force_resume_session=bool):
     # Handle no resume request
     if resume is None:
         if not len(existing_sessions):
-            session_dir = output_dir / "0000"
+            session_dir = output_dir / "0001"
         else:
             session_dir = output_dir / f"{sorted(existing_sessions)[-1] + 1:04}"
         session_dir.mkdir(parents=True, exist_ok=True)
