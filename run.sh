@@ -12,13 +12,6 @@ if [[ ! -d "$DATASET_SOURCE_DIR" ]]; then
     exit
 fi
 
-# if [ "$(git status -s -uall)" ]; then
-#     echo "Changes found in directory. Please stash or commit changes before running script."
-#     exit
-# else
-#     CURRENT_COMMIT_HASH=$(git rev-parse --verify HEAD)
-# fi
-
 IMAGE_NAME=arch-recognizer/trainings
 docker build \
     --tag ${IMAGE_NAME} \
