@@ -244,10 +244,10 @@ class TrainingRun:
 
         # Set task booleans
         do_test = (
-            self.test_freq and epoch > 0 and epoch % self.test_freq == 0
+            self.test_freq and epoch > 1 and epoch % self.test_freq == 0
         ) or epoch == self.max_epochs
         do_backup = (
-            self.backup_freq and epoch > 0 and epoch % self.backup_freq == 0
+            self.backup_freq and epoch > 1 and epoch % self.backup_freq == 0
         ) or epoch == self.max_epochs
 
         # Test
