@@ -28,16 +28,15 @@ class TrainingSession:
         data_proportion: float,
         max_epochs: int,
         profile: bool,
-        backup_freq: int,
-        test_freq: int,
-        patience: float,
     ):
         self.dir = dir
-        self.cp_dir = self.dir / "cp"
+        self.cp_dir = self.dir / "checkpoints"
         self.cp_dir.mkdir(parents=True, exist_ok=True)
-        self.py_dir = self.dir / "py"
+        self.sv_dir = self.dir / "saves"
+        self.sv_dir.mkdir(parents=True, exist_ok=True)
+        self.py_dir = self.dir / "logs"
         self.py_dir.mkdir(parents=True, exist_ok=True)
-        self.tb_dir = self.dir / "tb"
+        self.tb_dir = self.dir / "tensorboard"
         self.tb_dir.mkdir(parents=True, exist_ok=True)
 
         self.data_proportion = data_proportion
@@ -84,15 +83,15 @@ class TrainingSession:
                             name=run_name,
                             max_epochs=max_epochs,
                             profile=profile,
-                            backup_freq=backup_freq,
-                            test_freq=test_freq,
-                            patience=patience,
+                            test_freq=1,
+                            patience=80,
                             splits_dir=self.splits_dir,
                             metrics=[self.metric_accuracy],
                             cnn_model=cnn_model,
                             weights=weights,
                             learning_rate=learning_rate,
                             cp_dir=self.cp_dir / run_name,
+                            sv_dir=self.sv_dir / run_name,
                             py_dir=self.py_dir / run_name,
                             tb_dir=self.tb_dir / run_name,
                         )

@@ -45,28 +45,11 @@ def get_parser():
         help="base directory for output from all sessions (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-p",
-        "--patience",
-        default=20,
+        "-a",
+        "--min-accuracy",
+        default=0.6,
         type=float,
-        help="early stopping patience (default: %(default)s)",
-    )
-    parser_train.add_argument(
-        "-b",
-        "--backup-freq",
-        default=0,
-        type=int,
-        help="frequency of model backups in number of epochs (model will first be "
-        "evaluated against test data and results will be included in the file name but "
-        "not sent to Tensorboard) (default: %(default)s)",
-    )
-    parser_train.add_argument(
-        "-t",
-        "--test-freq",
-        default=5,
-        type=int,
-        help="frequency to evaluate model against test data in number of epochs "
-        "(default: %(default)s)",
+        help="min test accuracy for which to save model (default: %(default)s)",
     )
     parser_train.add_argument(
         "-e",
@@ -97,16 +80,5 @@ def get_parser():
         action="store_true",
         help="skip comparing commit hash when using -r/--resume (default: %(default)s)",
     )
-
-    # # test command
-    # parser_test = subparsers.add_parser(
-    #     "test", help="evaluate a trained model with test data"
-    # )
-    # parser_test.set_defaults(func=commands.test)
-    # parser_test.add_argument(
-    #     "run_number",
-    #     type=int,
-    #     help="run number of the model file/directory",
-    # )
 
     return parser
