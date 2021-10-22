@@ -123,9 +123,11 @@ class TrainingSession:
             with hparams_file_writer.as_default():
                 hp.hparams(hparams)
 
-            if not training_run.is_completed():
-                with tf.distribute.MirroredStrategy().scope():
-                    accuracy = training_run.execute()
+            if training_run.is_completed():
+                continue
+
+            with tf.distribute.MirroredStrategy().scope():
+                accuracy = training_run.execute()
 
             with hparams_file_writer.as_default():
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)

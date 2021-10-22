@@ -38,9 +38,11 @@ class TrainingRun:
         self.name: str = name
         self.max_epochs: int = max_epochs
         self.profile: bool = profile
-        self.backup_freq: int = backup_freq
+        # self.backup_freq: int = backup_freq
+        self.backup_freq: int = 1
         self.test_freq: int = test_freq
-        self.patience: float = patience
+        # self.patience: float = patience
+        self.patience: float = 50
         self.cnn_model: tf.keras.Model = cnn_model
         self.weights: str = weights
         self.learning_rate: float = learning_rate
@@ -51,7 +53,7 @@ class TrainingRun:
         self.cp_dir: Path = cp_dir
         self.py_dir: Path = py_dir
         self.tb_dir: Path = tb_dir
-        self.completed_marker_path = Path(self.py_dir / "completed")
+        self.completed_marker_path = Path(self.cp_dir / "completed")
 
         # Get attributes from keras cnn app
         cnn_app = CNN_APPS[self.cnn_model]
@@ -67,26 +69,29 @@ class TrainingRun:
         self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
         # File writer for writing evaluations against test data
         self.test_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "test"))
+        # Set an epoch tracker
+        self.epochs_completed = 0
 
     def is_completed(self) -> bool:
-        if not self.completed_marker_path.exists():
-            return False
+        return self.completed_marker_path.exists()
+        # if not self.completed_marker_path.exists():
+        #     return False
 
-        with open(self.completed_marker_path, "r") as f:
-            self.run_status = json.loads(f.read())
+        # with open(self.completed_marker_path, "r") as f:
+        #     self.run_status = json.loads(f.read())
 
-        reason = self.run_status.get("reason")
-        if reason == "early_stopped":
-            return all(
-                (
-                    self.max_epochs <= self.run_status.get("epoch", 0),
-                    self.patience <= self.run_status.get("patience", 0),
-                )
-            )
-        elif reason == "max_epochs":
-            return self.max_epochs <= self.run_status.get("epoch", 0)
-        else:
-            return False
+        # reason = self.run_status.get("reason")
+        # if reason == "early_stopped":
+        #     return all(
+        #         (
+        #             self.max_epochs <= self.run_status.get("epoch", 0),
+        #             self.patience <= self.run_status.get("patience", 0),
+        #         )
+        #     )
+        # elif reason == "max_epochs":
+        #     return self.max_epochs <= self.run_status.get("epoch", 0)
+        # else:
+        #     return False
 
     def execute(self) -> float:
         # Create log dirs
@@ -155,7 +160,7 @@ class TrainingRun:
                 tf.keras.callbacks.LambdaCallback(
                     on_epoch_begin=self._on_epoch_start,
                     on_epoch_end=self._on_epoch_end,
-                    on_training_end=self._on_training_end,
+                    # on_training_end=self._on_training_end,
                 ),
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
@@ -165,6 +170,36 @@ class TrainingRun:
                 ),
             ],
         )
+
+        if self.epochs_completed >= self.max_epochs:
+            self.run_status.update(
+                {"reason": "max_epochs", "epoch": self.epochs_completed}
+            )
+            with open(self.completed_marker_path, "w") as f:
+                f.write(json.dumps(self.run_status))
+        else:
+            self.run_status.update(
+                {
+                    "reason": "early_stopped",
+                    "epoch": self.epochs_completed,
+                    "patience": self.patience,
+                }
+            )
+        # with open(self.completed_marker_path, "r") as f:
+        #     marker_contents = json.loads(f.read())
+        #     if (
+        #         marker_contents.get("reason") != "max_epochs"
+        #         or marker_contents.get("epoch") != self.max_epochs
+        #     ):
+        #         self.run_status.update(
+        #             {
+        #                 "reason": "early_stopped",
+        #                 # "patience": self.patience,
+        #             }
+        #         )
+        with open(self.completed_marker_path, "w") as f:
+            f.write(json.dumps(self.run_status))
+        log.info(f"Training run done: {self.run_status['reason']}")
 
         # Return accuracy value for hparams metric
         _, test_accuracy = self.model.evaluate(self.test_ds)
@@ -212,28 +247,28 @@ class TrainingRun:
         with self.cm_file_writer.as_default():
             tf.summary.image("Confusion Matrix", cm_image, step=epoch)
 
-    def _on_training_end(self, epoch, logs):
-        if not self.completed_marker_path.exists():
-            with open(self.completed_marker_path, "w") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "reason": "early_stopped",
-                            "patience": self.patience,
-                            "epoch": epoch,
-                        }
-                    )
-                )
-        # Set completed file marker if max_epochs is reached
-        if epoch >= self.max_epochs:
-            reason = f"max epochs reached ({epoch})"
-            self.run_status.update({"reason": "max_epochs", "epoch": epoch})
-            with open(self.completed_marker_path, "w") as f:
-                f.write(json.dumps(self.run_status))
-            log.info(f"Training run done: {reason}")
+    # def _on_training_end(self, epoch, logs):
+    #     # Set completed file marker if max_epochs is reached
+    #     if epoch >= self.max_epochs:
+    #         reason = f"max epochs reached ({epoch})"
+    #         self.run_status.update({"reason": "max_epochs", "epoch": epoch})
+    #         with open(self.completed_marker_path, "w") as f:
+    #             f.write(json.dumps(self.run_status))
+    #         log.info(f"Training run done: {reason}")
+    #     else:
+    #         self.run_status.update(
+    #             {
+    #                 "reason": "early_stopped",
+    #                 "patience": self.patience,
+    #                 "epoch": epoch,
+    #             }
+    #         )
+    #     with open(self.completed_marker_path, "w") as f:
+    #         f.write(json.dumps(self.run_status))
 
     def _on_epoch_start(self, epoch, logs=None):
         log.info(f"Training {self.name} at epoch {epoch}...")
+        self.epochs_completed
 
     def _on_epoch_end(self, epoch, logs=None):
         # Report epoch end
@@ -262,6 +297,11 @@ class TrainingRun:
         # Backup
         if do_backup:
             self._save_model_backup(model_backup_path)
+
+        self.epochs_completed += 1
+
+        # Set completed file marker if max_epochs is reached
+        # if epoch >= self.max_epochs:
 
     def _evaluate_against_test_data(
         self, epoch: int, write_to_tensorboard: bool = False
