@@ -29,6 +29,7 @@ class TrainingRun:
         learning_rate: float,
         metrics: List[str],
         splits_dir: Path,
+        min_accuracy: float,
         cp_dir: Path,
         sv_dir: Path,
         py_dir: Path,
@@ -45,6 +46,7 @@ class TrainingRun:
         self.learning_rate: float = learning_rate
         self.metrics: List[str] = metrics
         self.splits_dir: Path = splits_dir
+        self.min_accuracy: float = min_accuracy
 
         # Set logs dir paths
         self.cp_dir: Path = cp_dir
@@ -231,7 +233,7 @@ class TrainingRun:
             epoch, write_to_tensorboard=True
         )
 
-        if test_accuracy >= self.accuracy_best and test_accuracy >= self.accuracy_goal:
+        if test_accuracy >= self.accuracy_best and test_accuracy >= self.min_accuracy:
             self._save_model_backup(epoch, test_loss, test_accuracy)
 
     def _evaluate_against_test_data(

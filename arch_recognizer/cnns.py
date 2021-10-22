@@ -19,14 +19,14 @@ CNN_APPS = {
     #     "class": tf.keras.applications.ResNet50V2,
     #     "batch_size": 32,
     # },
-    # tf.keras.applications.ResNet152V2.__name__: {
-    #     "image_size": (224, 224),
-    #     "scale": 1.0 / 255,
-    #     "offset": 0,
-    #     "preprocessor": tf.keras.applications.resnet.preprocess_input,
-    #     "class": tf.keras.applications.ResNet152V2,
-    #     "batch_size": 32,
-    # },
+    tf.keras.applications.ResNet152V2.__name__: {
+        "image_size": (224, 224),
+        "scale": 1.0 / 255,
+        "offset": 0,
+        "preprocessor": tf.keras.applications.resnet.preprocess_input,
+        "class": tf.keras.applications.ResNet152V2,
+        "batch_size": 32,
+    },
     # tf.keras.applications.InceptionV3.__name__: {
     #     "image_size": (299, 299),
     #     "scale": 1.0,

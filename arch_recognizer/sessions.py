@@ -26,6 +26,7 @@ class TrainingSession:
         self,
         dir: Path,
         data_proportion: float,
+        min_accuracy: float,
         max_epochs: int,
         profile: bool,
     ):
@@ -39,8 +40,8 @@ class TrainingSession:
         self.tb_dir = self.dir / "tensorboard"
         self.tb_dir.mkdir(parents=True, exist_ok=True)
 
-        self.data_proportion = data_proportion
-
+        self.data_proportion: float = data_proportion
+        self.min_accuracy: float = min_accuracy
         if not DATASET_DIR.exists() or not list(DATASET_DIR.iterdir()):
             raise EnvironmentError(
                 "If running module directly, add source dataset to ./dataset "
@@ -53,7 +54,7 @@ class TrainingSession:
         self.hp_cnn_model = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
         self.hp_weights = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
         self.hp_learning_rate = hp.HParam(
-            "learning_rate", hp.Discrete([float(1e-3), float(3e-3), float(5e-3)])
+            "learning_rate", hp.Discrete([float(1e-3), float(2e-3)])
         )
         self.metric_accuracy = "accuracy"
 
@@ -90,6 +91,7 @@ class TrainingSession:
                             cnn_model=cnn_model,
                             weights=weights,
                             learning_rate=learning_rate,
+                            min_accuracy=min_accuracy,
                             cp_dir=self.cp_dir / run_name,
                             sv_dir=self.sv_dir / run_name,
                             py_dir=self.py_dir / run_name,

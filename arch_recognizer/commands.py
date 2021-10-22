@@ -32,6 +32,7 @@ def train(args):
     trainer = sessions.TrainingSession(
         dir=session_dir,
         data_proportion=args.data_proportion,
+        min_accuracy=args.min_accuracy,
         max_epochs=args.max_epochs,
         profile=args.profile,
     )
