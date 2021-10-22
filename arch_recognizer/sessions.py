@@ -128,7 +128,11 @@ class TrainingSession:
                 continue
 
             with tf.distribute.MirroredStrategy().scope():
-                accuracy = training_run.execute()
+                try:
+                    accuracy = training_run.execute()
+                except Exception as err:
+                    log.error(err)
+                    raise err
 
             with hparams_file_writer.as_default():
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
