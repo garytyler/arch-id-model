@@ -6,13 +6,14 @@ services:
       context: .
       target: dev-stage
       args:
-        - USER=${USER}
+        # - USER=${USER}
+        - USERNAME=dev
     command: /bin/sh -c "while sleep 1000; do :; done"
     ports:
       - 6007:6007
     volumes:
-      - "workspace:/workspace"
-      - ".:/workspace:rw"
+      # - "workspace:/workspace"
+      - ".:/workspace"
     runtime: nvidia
     environment:
       - "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-}"
@@ -21,5 +22,5 @@ services:
       - "TF_FORCE_GPU_ALLOW_GROWTH=true"
       - "TF_GPU_THREAD_MODE=gpu_private"
       - "TF_CPP_MIN_LOG_LEVEL=1"
-volumes:
-  workspace:
+# volumes:
+# workspace:
