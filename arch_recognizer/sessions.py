@@ -120,21 +120,19 @@ class TrainingSession:
 
         for hparams, training_run in zip(self.hparam_combinations, self.training_runs):
             self._set_run_log_file(training_run.py_dir / f"{training_run.name}.log")
-            hparams_file_writer = tf.summary.create_file_writer(str(self.tb_dir))
-            with hparams_file_writer.as_default():
-                hp.hparams(hparams)
-
             if training_run.is_completed():
                 continue
+            # Perform all training in tb file writer context to send full stats
+            with tf.summary.create_file_writer(str(self.tb_dir)).as_default():
+                hp.hparams(hparams)
 
-            with tf.distribute.MirroredStrategy().scope():
-                try:
-                    accuracy = training_run.execute()
-                except Exception as err:
-                    log.error(err)
-                    raise err
+                with tf.distribute.MirroredStrategy().scope():
+                    try:
+                        accuracy = training_run.execute()
+                    except Exception as err:
+                        log.error(err)
+                        raise err
 
-            with hparams_file_writer.as_default():
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
 
     def __del__(self):
