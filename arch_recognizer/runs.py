@@ -247,7 +247,7 @@ class TrainingRun:
             "test_accuracy": test_accuracy,
         }
         log.info(f"Evaluation against test data done: {results}")
-        if not write_to_tensorboard:
+        if write_to_tensorboard:
             with self.test_file_writer.as_default():
                 tf.summary.scalar("test_loss", test_loss, step=epoch)
                 tf.summary.scalar("test_accuracy", test_accuracy, step=epoch)
