@@ -43,11 +43,9 @@ class TrainingSession:
         self.dataset_dir: Path = dataset_dir
         self.data_proportion: float = data_proportion
         self.min_accuracy: float = min_accuracy
+
         if not self.dataset_dir.exists() or not list(self.dataset_dir.iterdir()):
-            raise EnvironmentError(
-                "If running module directly, add source dataset to ./dataset "
-                "with structure root/classes/images"
-            )
+            raise EnvironmentError(f"Dataset dir not found: {self.dataset_dir}")
 
         self.splits_dir: Path = Path(tempfile.mkdtemp(prefix=f"{APP_NAME}-splits-"))
 
@@ -137,7 +135,12 @@ class TrainingSession:
                 tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
 
     def __del__(self):
-        shutil.rmtree(self.splits_dir, ignore_errors=True)
+        try:
+            _splits_dir = getattr(self, "splits_dir")
+        except AttributeError:
+            pass
+        else:
+            shutil.rmtree(_splits_dir, ignore_errors=True)
 
     def _set_run_log_file(self, path, level=logging.INFO):
         for logger in self.run_loggers:

@@ -6,8 +6,6 @@ services:
       context: .
       target: dev-stage
     command: /bin/sh -c "while sleep 1000; do :; done"
-    ports:
-      - 6007:6007
     volumes:
       - ".:/workspace"
     environment:
