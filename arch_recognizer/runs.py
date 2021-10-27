@@ -61,8 +61,8 @@ class TrainingRun:
         cnn_app = CNN_APPS[self.cnn_model]
         self.cnn_app_model: Callable = cnn_app["class"]
         self.cnn_app_preprocessor: Callable = cnn_app["preprocessor"]
-        self.image_size: Tuple[int] = cnn_app["image_size"]
-        self.batch_size: int = cnn_app["batch_size"]
+        self.cnn_image_size: Tuple[int] = cnn_app["image_size"]
+        self.cnn_batch_size: int = cnn_app["batch_size"]
 
         # Set other attributes
         self.run_status: dict = {}
@@ -84,46 +84,49 @@ class TrainingRun:
         self.py_dir.mkdir(parents=True, exist_ok=True)
         self.tb_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create Model
-        self.model = tf.keras.models.Sequential(
-            name=self.name,
-            layers=[
-                tf.keras.layers.experimental.preprocessing.RandomFlip(
-                    "horizontal", input_shape=(*self.image_size, 3)
-                ),
-                tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-                self.cnn_app_model(
-                    include_top=False,
-                    weights=self.weights or None,
-                    classes=len(self.class_names),
-                ),
-                tf.keras.layers.GlobalAveragePooling2D(),
-                tf.keras.layers.Dropout(0.1),
-                tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(512, activation="relu"),
-                tf.keras.layers.Dense(
-                    len(self.class_names),
-                    activation="softmax",
-                    name="predictions",
-                ),
-            ],
-        )
+        # Set strategy
+        strategy = tf.distribute.MirroredStrategy()
 
-        # Compile
-        adam = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
-        self.model.compile(
-            optimizer=adam,
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-            metrics=self.metrics,
-        )
+        # Build datasets
+        batch_size = self.cnn_batch_size * strategy.num_replicas_in_sync
+        self.train_ds = self._get_dataset("train", batch_size=batch_size)
+        self.val_ds = self._get_dataset("val", batch_size=batch_size)
+        self.test_ds = self._get_dataset("test", batch_size=batch_size)
+
+        with strategy.scope():
+            # Create model
+            self.model = tf.keras.models.Sequential(
+                name=self.name,
+                layers=[
+                    tf.keras.layers.experimental.preprocessing.RandomFlip(
+                        "horizontal", input_shape=(*self.cnn_image_size, 3)
+                    ),
+                    tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
+                    self.cnn_app_model(
+                        include_top=False,
+                        weights=self.weights or None,
+                        classes=len(self.class_names),
+                    ),
+                    tf.keras.layers.GlobalAveragePooling2D(),
+                    tf.keras.layers.Dropout(0.1),
+                    tf.keras.layers.Flatten(),
+                    tf.keras.layers.Dense(512, activation="relu"),
+                    tf.keras.layers.Dense(
+                        len(self.class_names),
+                        activation="softmax",
+                        name="predictions",
+                    ),
+                ],
+            )
+            # Compile model
+            self.model.compile(
+                optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate),
+                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+                metrics=self.metrics,
+            )
 
         # Log model summary
         self.model.summary(line_length=80, print_fn=log.info)
-
-        # Build datasets
-        self.train_ds = self._get_dataset("train")
-        self.val_ds = self._get_dataset("val")
-        self.test_ds = self._get_dataset("test")
 
         # Train
         self.model.fit(
@@ -178,7 +181,7 @@ class TrainingRun:
         self._save_model_backup(self.epochs_completed, test_loss, test_accuracy)
         return test_accuracy
 
-    def _get_dataset(self, split: str) -> tf.data.Dataset:
+    def _get_dataset(self, split: str, batch_size: int) -> tf.data.Dataset:
         _options = tf.data.Options()
         _options.experimental_distribute.auto_shard_policy = (
             tf.data.experimental.AutoShardPolicy.DATA
@@ -193,13 +196,13 @@ class TrainingRun:
                 self.splits_dir / split,
                 labels="inferred",
                 label_mode="int",
-                image_size=self.image_size,
-                batch_size=self.batch_size,
+                image_size=self.cnn_image_size,
+                batch_size=batch_size,
                 shuffle=True,
                 seed=SEED,
             )
             .with_options(_options)
-            .map(_preprocess, num_parallel_calls=16)
+            .map(_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
             .cache()
             .prefetch(buffer_size=tf.data.AUTOTUNE)
             .shuffle(
