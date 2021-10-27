@@ -9,6 +9,7 @@
 !/.devcontainer
 !/.devcontainer/*
 !/pyproject.toml
+!/poetry.lock
 !/.flake8
 !/.dockerignore
 !/arch_recognizer

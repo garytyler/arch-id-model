@@ -23,5 +23,11 @@
 		"ms-azuretools.vscode-docker"
 	],
 	"workspaceFolder": "/workspace",
-	"postCreateCommand": "sudo chown 1000 /workspace",
+	// "containerUser": "vscode"
+	// "postCreateCommand": "sudo chown 1000 /workspace",
+	// "remoteUser": "rootless",
+	// ""
+	// "runArgs": [
+	// 	"--userns=keep-id"
+	// ],
 }

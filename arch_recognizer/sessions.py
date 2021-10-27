@@ -25,6 +25,7 @@ class TrainingSession:
     def __init__(
         self,
         dir: Path,
+        dataset_dir:Path,
         data_proportion: float,
         min_accuracy: float,
         max_epochs: int,
@@ -39,10 +40,10 @@ class TrainingSession:
         self.py_dir.mkdir(parents=True, exist_ok=True)
         self.tb_dir = self.dir / "tensorboard"
         self.tb_dir.mkdir(parents=True, exist_ok=True)
-
+        self.dataset_dir:Path = dataset_dir
         self.data_proportion: float = data_proportion
         self.min_accuracy: float = min_accuracy
-        if not DATASET_DIR.exists() or not list(DATASET_DIR.iterdir()):
+        if not self.dataset_dir.exists() or not list(self.dataset_dir.iterdir()):
             raise EnvironmentError(
                 "If running module directly, add source dataset to ./dataset "
                 "with structure root/classes/images"
@@ -104,7 +105,7 @@ class TrainingSession:
         self._launch_tensorboard()
 
         generate_dataset_splits(
-            src_dir=DATASET_DIR,
+            src_dir=self.dataset_dir,
             dst_dir=self.splits_dir,
             seed=SEED,
             proportion=self.data_proportion,
