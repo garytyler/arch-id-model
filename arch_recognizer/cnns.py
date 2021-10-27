@@ -41,7 +41,7 @@ CNN_APPS = {
         "offset": 0,
         "preprocessor": tf.keras.applications.inception_resnet_v2.preprocess_input,
         "class": tf.keras.applications.InceptionResNetV2,
-        "batch_size": 16,
+        "batch_size": 24,
     },
     # tf.keras.applications.MobileNetV2.__name__: {
     #     "image_size": (224, 224),

@@ -224,7 +224,7 @@ class TrainingRun:
             tf.summary.image("Confusion Matrix", cm_image, step=epoch)
 
     def _on_epoch_start(self, epoch, logs=None):
-        log.info(f"Training {self.name} at epoch {epoch}...")
+        log.info(f"Training {self.name}...")
 
     def _on_epoch_end(self, epoch, logs=None):
         self.epochs_completed = epoch
