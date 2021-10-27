@@ -11,7 +11,7 @@ import tensorflow as tf
 from . import settings
 from .cnns import CNN_APPS
 from .plotting import plot_confusion_matrix, plot_to_image
-from .settings import DATASET_DIR, SEED
+from .settings import SEED
 
 log = logging.getLogger(settings.APP_NAME)
 
@@ -30,6 +30,7 @@ class TrainingRun:
         metrics: List[str],
         splits_dir: Path,
         min_accuracy: float,
+        dataset_dir: Path,
         cp_dir: Path,
         sv_dir: Path,
         py_dir: Path,
@@ -47,6 +48,7 @@ class TrainingRun:
         self.metrics: List[str] = metrics
         self.splits_dir: Path = splits_dir
         self.min_accuracy: float = min_accuracy
+        self.dataset_dir: Path = dataset_dir
 
         # Set logs dir paths
         self.cp_dir: Path = cp_dir
@@ -64,7 +66,7 @@ class TrainingRun:
 
         # Set other attributes
         self.run_status: dict = {}
-        self.class_names = list([i.name for i in DATASET_DIR.iterdir()])
+        self.class_names = list([i.name for i in self.dataset_dir.iterdir()])
         # File writer for writing confusion matrix plots
         self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
         # File writer for writing evaluations against test data

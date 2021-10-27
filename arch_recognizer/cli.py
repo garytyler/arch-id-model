@@ -22,6 +22,20 @@ def get_parser():
         choices=["debug", "info", "warning", "error", "critical"],
         help="tensorflow log level (default: %(default)s)",
     )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        default=BASE_DIR / "output",
+        type=Path,
+        help="base directory for output from all sessions (default: %(default)s)",
+    )
+    parser.add_argument(
+        "-d",
+        "--dataset-dir",
+        default=BASE_DIR / "dataset",
+        type=Path,
+        help="base directory for output from all sessions (default: %(default)s)",
+    )
 
     # create subparsers
     subparsers = parser.add_subparsers(help="sub-command help")
@@ -38,13 +52,6 @@ def get_parser():
         help="resume last session or specified session (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-o",
-        "--output-dir",
-        default=BASE_DIR / "output",
-        type=Path,
-        help="base directory for output from all sessions (default: %(default)s)",
-    )
-    parser_train.add_argument(
         "-a",
         "--min-accuracy",
         default=0.6,
@@ -59,8 +66,8 @@ def get_parser():
         help="maximum epochs per run (default: %(default)s)",
     )
     parser_train.add_argument(
-        "-d",
-        "--data-proportion",
+        "--proportion",
+        dest="data_proportion",
         default=1.0,
         type=float,
         help="proportion of dataset to use (default: %(default)s)",

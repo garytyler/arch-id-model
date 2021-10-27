@@ -12,7 +12,7 @@ from . import settings
 from .cnns import CNN_APPS
 from .loggers import app_log_formatter
 from .runs import TrainingRun
-from .settings import APP_NAME, DATASET_DIR, SEED
+from .settings import APP_NAME, SEED
 from .splitting import generate_dataset_splits
 
 log = logging.getLogger(settings.APP_NAME)
@@ -25,6 +25,7 @@ class TrainingSession:
     def __init__(
         self,
         dir: Path,
+        dataset_dir: Path,
         data_proportion: float,
         min_accuracy: float,
         max_epochs: int,
@@ -39,10 +40,10 @@ class TrainingSession:
         self.py_dir.mkdir(parents=True, exist_ok=True)
         self.tb_dir = self.dir / "tensorboard"
         self.tb_dir.mkdir(parents=True, exist_ok=True)
-
+        self.dataset_dir: Path = dataset_dir
         self.data_proportion: float = data_proportion
         self.min_accuracy: float = min_accuracy
-        if not DATASET_DIR.exists() or not list(DATASET_DIR.iterdir()):
+        if not self.dataset_dir.exists() or not list(self.dataset_dir.iterdir()):
             raise EnvironmentError(
                 "If running module directly, add source dataset to ./dataset "
                 "with structure root/classes/images"
@@ -92,6 +93,7 @@ class TrainingSession:
                             weights=weights,
                             learning_rate=learning_rate,
                             min_accuracy=min_accuracy,
+                            dataset_dir=self.dataset_dir,
                             cp_dir=self.cp_dir / run_name,
                             sv_dir=self.sv_dir / run_name,
                             py_dir=self.py_dir / run_name,
@@ -104,7 +106,7 @@ class TrainingSession:
         self._launch_tensorboard()
 
         generate_dataset_splits(
-            src_dir=DATASET_DIR,
+            src_dir=self.dataset_dir,
             dst_dir=self.splits_dir,
             seed=SEED,
             proportion=self.data_proportion,
