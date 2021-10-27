@@ -4,7 +4,7 @@ set -e
 
 echo $@
 THIS_DIR=$(realpath $(dirname $0))
-IMAGE_NAME=arch-recognizer/training
+IMAGE_NAME=arch-recognizer
 
 if [[ "${@}" =~ .*([ ]-d[ =]|[ ]--dataset-dir[ =]).* ]]; then
     echo 'Use DATASET_DIR environment variable instead of -d/--dataset-dir arguments'
@@ -40,6 +40,7 @@ RUN_CMD=(
     --env="TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-2}"
     --env="TF_ENABLE_AUTO_MIXED_PRECISION=${TF_ENABLE_AUTO_MIXED_PRECISION:-1}"
     --rm
+    --name training
     -- ${IMAGE_NAME}
     python -m arch_recognizer
     "--dataset-dir=/dataset"

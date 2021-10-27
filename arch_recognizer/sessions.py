@@ -19,9 +19,6 @@ log = logging.getLogger(settings.APP_NAME)
 
 
 class TrainingSession:
-
-    run_loggers = [log]
-
     def __init__(
         self,
         dir: Path,
@@ -143,15 +140,13 @@ class TrainingSession:
             shutil.rmtree(_splits_dir, ignore_errors=True)
 
     def _set_run_log_file(self, path, level=logging.INFO):
-        for logger in self.run_loggers:
-            if getattr(self, "run_log_file_handler", None) and logger.hasHandlers():
-                logger.removeHandler(self.run_log_file_handler)
+        if getattr(self, "run_log_file_handler", None):
+            log.removeHandler(self.run_log_file_handler)
         os.makedirs(path.parent, exist_ok=True)
         self.run_log_file_handler = logging.FileHandler(path)
         self.run_log_file_handler.setFormatter(app_log_formatter)
         self.run_log_file_handler.setLevel(level)
-        for logger in self.run_loggers:
-            logger.addHandler(self.run_log_file_handler)
+        log.addHandler(self.run_log_file_handler)
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
