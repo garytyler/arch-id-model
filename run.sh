@@ -21,6 +21,7 @@ docker build \
     --build-arg="USERNAME=$(whoami)" \
     -- ${THIS_DIR}/
 
+echo $NVIDIA_VISIBLE_DEVICES
 RUN_CMD=(
     docker run
     --publish=6006:6006
@@ -31,8 +32,7 @@ RUN_CMD=(
     -v="${OUTPUT_DIR:-${THIS_DIR}/output}:/output"                                # if OUTPUT_DIR is given, mount it to /output, else bind ./output to /output
     --gpus="${GPUS:-all}"
     --env="NVIDIA_DRIVER_CAPABILITIES=compute,utility"
-    --env="NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-1,2}"
-    --env="CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1,2}"
+    --env="CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES?}"
     --env="CUDA_DEVICE_ORDER=PCI_BUS_ID"
     --env="TF_FORCE_GPU_ALLOW_GROWTH=true"
     --env="TF_GPU_THREAD_MODE=gpu_private"
