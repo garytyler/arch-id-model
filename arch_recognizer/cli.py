@@ -87,5 +87,10 @@ def get_parser():
         action="store_true",
         help="skip comparing commit hash when using -r/--resume (default: %(default)s)",
     )
+    parser_train.add_argument(
+        "--disable-tensorboard-server",
+        action="store_true",
+        help="disable tensorboard server (default: %(default)s)",
+    )
 
     return parser

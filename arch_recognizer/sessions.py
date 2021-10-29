@@ -27,6 +27,7 @@ class TrainingSession:
         min_accuracy: float,
         max_epochs: int,
         profile: bool,
+        disable_tensorboard_server:bool
     ):
         self.dir = dir
         self.cp_dir = self.dir / "checkpoints"
@@ -40,6 +41,7 @@ class TrainingSession:
         self.dataset_dir: Path = dataset_dir
         self.data_proportion: float = data_proportion
         self.min_accuracy: float = min_accuracy
+        self.disable_tensorboard_server = disable_tensorboard_server
 
         if not self.dataset_dir.exists() or not list(self.dataset_dir.iterdir()):
             raise EnvironmentError(f"Dataset dir not found: {self.dataset_dir}")
@@ -98,7 +100,8 @@ class TrainingSession:
                     run_num += 1
 
     def execute(self):
-        self._launch_tensorboard()
+        if not self.disable_tensorboard_server:
+            self._launch_tensorboard()
 
         generate_dataset_splits(
             src_dir=self.dataset_dir,

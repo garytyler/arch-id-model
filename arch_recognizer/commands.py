@@ -36,6 +36,7 @@ def train(args):
         min_accuracy=args.min_accuracy,
         max_epochs=args.max_epochs,
         profile=args.profile,
+        disable_tensorboard_server=args.disable_tensorboard_server
     )
     trainer.execute()
 
