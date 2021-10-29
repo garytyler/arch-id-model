@@ -2,7 +2,6 @@
 
 set -e
 
-echo $@
 THIS_DIR=$(realpath $(dirname $0))
 IMAGE_NAME=arch-recognizer
 
