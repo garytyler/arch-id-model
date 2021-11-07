@@ -121,7 +121,7 @@ class TrainingRun:
             # Compile model
             self.model.compile(
                 optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate),
-                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+                loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
                 metrics=self.metrics,
             )
 
@@ -195,7 +195,8 @@ class TrainingRun:
             tf.keras.preprocessing.image_dataset_from_directory(
                 self.splits_dir / split,
                 labels="inferred",
-                label_mode="int",
+                # label_mode="int",
+                label_mode="categorical",
                 image_size=self.cnn_image_size,
                 batch_size=batch_size,
                 shuffle=True,
