@@ -25,7 +25,7 @@ CNN_APPS = {
         "offset": 0,
         "preprocessor": tf.keras.applications.resnet.preprocess_input,
         "class": tf.keras.applications.ResNet152V2,
-        "batch_size": 32,
+        "batch_size": 16,
     },
     # tf.keras.applications.InceptionV3.__name__: {
     #     "image_size": (299, 299),
