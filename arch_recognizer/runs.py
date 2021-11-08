@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import List
 
 import numpy as np
 import sklearn
@@ -9,41 +9,10 @@ import sklearn.metrics
 import tensorflow as tf
 
 from . import settings
-from .cnns import CNN_APPS
 from .plotting import plot_confusion_matrix, plot_to_image
-from .settings import SEED
+from .settings import SEED, BaseCNN
 
 log = logging.getLogger(settings.APP_NAME)
-
-
-def create_model(name, cnn_app_model, image_size, num_classes: int, metrics: list = []):
-    # Create model
-    _model = tf.keras.models.Sequential(
-        name=name,
-        layers=[
-            tf.keras.layers.experimental.preprocessing.RandomFlip(
-                "horizontal", input_shape=(*image_size, 3)
-            ),
-            tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-            cnn_app_model,
-            tf.keras.layers.GlobalAveragePooling2D(),
-            tf.keras.layers.Dropout(0.1),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(512, activation="relu"),
-            tf.keras.layers.Dense(
-                num_classes, activation="softmax", name="predictions"
-            ),
-        ],
-    )
-    # Compile model
-    _model.compile(
-        optimizer=tf.keras.optimizers.Adam(
-            # learning_rate=learning_rate,
-        ),
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-        metrics=metrics,
-    )
-    return _model
 
 
 class TrainingRun:
@@ -51,7 +20,7 @@ class TrainingRun:
         self,
         name: str,
         test_freq: int,
-        cnn_model: tf.keras.Model,
+        base_cnn: BaseCNN,
         weights: str,
         metrics: List[str],
         splits_dir: Path,
@@ -67,7 +36,7 @@ class TrainingRun:
         self.name: str = name
         self.max_epochs: int = 100
         self.test_freq: int = test_freq
-        self.cnn_model: tf.keras.Model = cnn_model
+        self.base_cnn: BaseCNN = base_cnn
         self.weights: str = weights
         # self.learning_rate: float = learning_rate
         self.metrics: List[str] = metrics
@@ -81,13 +50,6 @@ class TrainingRun:
         self.py_dir: Path = py_dir
         self.tb_dir: Path = tb_dir
         self.completed_marker_path = Path(self.cp_dir / "completed")
-
-        # Get attributes from keras cnn app
-        cnn_app = CNN_APPS[self.cnn_model]
-        self.cnn_app_model: Callable = cnn_app["class"]
-        self.cnn_app_preprocessor: Callable = cnn_app["preprocessor"]
-        self.cnn_image_size: Tuple[int] = cnn_app["image_size"]
-        self.cnn_batch_size: int = cnn_app["batch_size"]
 
         # Set other attributes
         self.run_status: dict = {}
@@ -114,19 +76,38 @@ class TrainingRun:
 
         # Build datasets
         self._build_datasets(
-            batch_size=self.cnn_batch_size * strategy.num_replicas_in_sync
+            batch_size=self.base_cnn.batch_size * strategy.num_replicas_in_sync
         )
 
         with strategy.scope():
-            self.model = create_model(
+            # Create model
+            self.model = tf.keras.models.Sequential(
                 name=self.name,
-                cnn_app_model=self.cnn_app_model(
-                    include_top=False,
-                    weights=self.weights or None,
-                    classes=len(self.class_names),
+                layers=[
+                    tf.keras.layers.experimental.preprocessing.RandomFlip(
+                        "horizontal", input_shape=(*self.base_cnn.image_size, 3)
+                    ),
+                    tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
+                    self.base_cnn.base_model(
+                        include_top=False,
+                        weights=self.weights or None,
+                        classes=len(self.class_names),
+                    ),
+                    tf.keras.layers.GlobalAveragePooling2D(),
+                    tf.keras.layers.Dropout(0.1),
+                    tf.keras.layers.Flatten(),
+                    tf.keras.layers.Dense(512, activation="relu"),
+                    tf.keras.layers.Dense(
+                        len(self.class_names), activation="softmax", name="predictions"
+                    ),
+                ],
+            )
+            # Compile model
+            self.model.compile(
+                optimizer=tf.keras.optimizers.Adam(
+                    # learning_rate=learning_rate,
                 ),
-                image_size=self.cnn_image_size,
-                num_classes=len(self.class_names),
+                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
                 metrics=self.metrics,
             )
 
@@ -194,14 +175,14 @@ class TrainingRun:
         _options.threading.max_intra_op_parallelism = 1
 
         def _preprocess(img, lbl):
-            return self.cnn_app_preprocessor(img), lbl
+            return self.base_cnn.preprocess(img), lbl
 
         return (
             tf.keras.preprocessing.image_dataset_from_directory(
                 self.splits_dir / split,
                 labels="inferred",
                 label_mode="int",
-                image_size=self.cnn_image_size,
+                image_size=self.base_cnn.image_size,
                 batch_size=batch_size,
                 shuffle=True,
                 seed=SEED,
@@ -235,6 +216,7 @@ class TrainingRun:
 
     def _on_epoch_end(self, epoch, logs=None):
         self.epochs_completed = epoch
+
         # Report epoch end
         log.info(f"Epoch {epoch} done: {logs}")
 

@@ -9,12 +9,10 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 
-from arch_recognizer.cnns import CNN_APPS
-from arch_recognizer.splitting import generate_dataset_splits
-
 from . import sessions
 from .loggers import initialize_loggers
-from .settings import APP_NAME, BASE_DIR, SEED
+from .settings import APP_NAME, BASE_CNNS, BASE_DIR, SEED
+from .splitting import generate_dataset_splits
 
 log = logging.getLogger(APP_NAME)
 
@@ -23,10 +21,7 @@ def _get_saved_model_dir(args):
     session_models_dir = Path(args.output_dir / f"{int(args.session):04}" / "saves")
     run_dir = None
     for d in sorted(list(session_models_dir.iterdir())):
-        if (
-            d.name.split("-")[2] == args.cnn_model
-            and d.name.split("-")[3] == args.weights
-        ):
+        if d.name.split("-")[2] == args.cnn and d.name.split("-")[3] == args.weights:
             run_dir = d
             break
 
@@ -74,7 +69,6 @@ def predict(args):
 
     log.info(f"Loading saved model {model_dir.name}")
     model = tf.keras.models.load_model(model_dir)
-    # model.load_weights(model_dir)
 
     log.info("Generating test data...")
     session = _create_session(args)
@@ -94,12 +88,12 @@ def predict(args):
     log.info("Generating predictions...")
     for img_path in [Path(random.choice(test_files)) for _ in range(args.count)]:
         img = tf.keras.preprocessing.image.load_img(
-            img_path, target_size=CNN_APPS[args.cnn_model]["image_size"]
+            img_path, target_size=BASE_CNNS[args.cnn].image_size
         )
 
         img_array = tf.keras.preprocessing.image.img_to_array(img)
 
-        img_array = CNN_APPS[args.cnn_model]["preprocessor"](img_array)
+        img_array = BASE_CNNS[args.cnn].preprocess(img_array)
         img_array = tf.expand_dims(img_array, 0)
         predictions = model.predict(img_array)
         scores = tf.nn.softmax(predictions[0])

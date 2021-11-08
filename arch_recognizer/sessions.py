@@ -9,10 +9,9 @@ import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
 from . import settings
-from .cnns import CNN_APPS
 from .loggers import app_log_formatter
 from .runs import TrainingRun
-from .settings import APP_NAME, SEED
+from .settings import APP_NAME, BASE_CNNS, SEED
 from .splitting import generate_dataset_splits
 
 log = logging.getLogger(settings.APP_NAME)
@@ -51,7 +50,7 @@ class TrainingSession:
         ]
 
         # Define hyperparams
-        self.hp_cnn_model = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
+        self.hp_base_cnn = hp.HParam("cnn", hp.Discrete(list(BASE_CNNS.values())))
         self.hp_weights = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
         self.hp_learning_rate = hp.HParam(
             "learning_rate", hp.Discrete([float(1e-3), float(2e-3)])
@@ -62,16 +61,16 @@ class TrainingSession:
         run_num = 0
         self.hparam_combinations = []
         self.training_runs = []
-        for cnn_model in self.hp_cnn_model.domain.values:
+        for base_cnn in self.hp_base_cnn.domain.values:
             for weights in self.hp_weights.domain.values:
                 # for learning_rate in self.hp_learning_rate.domain.values:
                 self.hparam_combinations.append(
-                    {self.hp_cnn_model: cnn_model, self.hp_weights: weights}
+                    {self.hp_base_cnn: base_cnn, self.hp_weights: weights}
                 )
                 run_name = (
                     f"{self.session_dir.name}"
                     f"-{run_num}"
-                    f"-{cnn_model}"
+                    f"-{base_cnn.name}"
                     f"-{weights or 'none'}"
                 )
                 self.training_runs.append(
@@ -81,7 +80,7 @@ class TrainingSession:
                         splits_dir=self.splits_dir,
                         class_names=self.class_names,
                         metrics=[self.metric_accuracy],
-                        cnn_model=cnn_model,
+                        base_cnn=base_cnn,
                         weights=weights,
                         min_accuracy=min_accuracy,
                         dataset_dir=self.dataset_dir,
@@ -108,7 +107,7 @@ class TrainingSession:
             str(self.tb_dir / "hparam_tuning")
         ).as_default():
             hp.hparams_config(
-                hparams=[self.hp_cnn_model, self.hp_weights],
+                hparams=[self.hp_base_cnn, self.hp_weights],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 

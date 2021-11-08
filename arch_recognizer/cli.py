@@ -1,10 +1,8 @@
 import argparse
 from pathlib import Path
 
-from arch_recognizer.cnns import CNN_APPS
-
 from . import commands
-from .settings import BASE_DIR, WEIGHTS
+from .settings import BASE_CNNS, BASE_DIR, WEIGHTS
 
 
 def get_parser():
@@ -58,10 +56,10 @@ def get_parser():
     )
     parser_predict.add_argument(
         "-m",
-        "--cnn-model",
+        "--cnn",
         default="InceptionResNetV2",
         type=str,
-        choices=CNN_APPS.keys(),
+        choices=BASE_CNNS.keys(),
         help="tensorflow log level (default: %(default)s)",
     )
     parser_predict.add_argument(
