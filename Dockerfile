@@ -14,13 +14,15 @@ RUN pip install -U \
 # Build development environment
 FROM train-stage AS dev-stage
 
+# Update apt packages
+RUN apt-get update
+
 # Install development dependencies from apt
-RUN apt-get update \
-    && apt-get install direnv
+RUN apt-get install direnv
 
 # Install development dependencies from pip
 RUN pip install -U \
-    black==21.9b0 \
+    black==21.7b0 \
     isort==5.9.3 \
     flake8==4.0.1 \
     mypy==0.910

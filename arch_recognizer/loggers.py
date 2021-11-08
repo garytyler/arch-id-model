@@ -14,8 +14,8 @@ app_log_formatter = logging.Formatter(
 )
 
 
-def initialize_session_loggers(
-    logs_dir: Path, app_log_level: Union[str, int], tf_log_level: Union[str, int]
+def initialize_loggers(
+    app_log_level: Union[str, int], tf_log_level: Union[str, int], logs_dir: Path = None
 ):
     app_log_level = (
         app_log_level.upper() if isinstance(app_log_level, str) else app_log_level
@@ -24,12 +24,6 @@ def initialize_session_loggers(
         tf_log_level.upper() if isinstance(tf_log_level, str) else tf_log_level
     )
 
-    session_log_path = (
-        logs_dir / f"{datetime.datetime.now().strftime(TIMESTAMP_FORMAT)}.log"
-    )
-    session_log_path.parent.mkdir(parents=True, exist_ok=True)
-    session_log_file_handler = logging.FileHandler(session_log_path)
-
     # Configure arch-recognizer logger
     app_log_stream_handler = logging.StreamHandler(sys.stdout)
     app_log_stream_handler.setFormatter(app_log_formatter)
@@ -37,7 +31,6 @@ def initialize_session_loggers(
     app_log.propagate = False  # https://stackoverflow.com/a/33664610
     app_log.setLevel(app_log_level)
     app_log.addHandler(app_log_stream_handler)
-    app_log.addHandler(session_log_file_handler)
 
     # Configure tensorflow logger
     tf_log_stream_handler = logging.StreamHandler(sys.stdout)
@@ -46,4 +39,12 @@ def initialize_session_loggers(
     tf_log.propagate = False  # https://stackoverflow.com/a/33664610
     tf_log.setLevel(tf_log_level)
     tf_log.addHandler(tf_log_stream_handler)
-    tf_log.addHandler(session_log_file_handler)
+
+    if logs_dir:
+        session_log_path = (
+            logs_dir / f"{datetime.datetime.now().strftime(TIMESTAMP_FORMAT)}.log"
+        )
+        session_log_path.parent.mkdir(parents=True, exist_ok=True)
+        session_log_file_handler = logging.FileHandler(session_log_path)
+        app_log.addHandler(session_log_file_handler)
+        tf_log.addHandler(session_log_file_handler)

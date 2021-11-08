@@ -15,19 +15,6 @@
 				]
 			},
 		},
-		"terminal.integrated.defaultProfile.linux": "bash",
-		"python.formatting.blackPath": "black"
 	},
-	"extensions": [
-		"ms-toolsai.jupyter",
-		"ms-azuretools.vscode-docker"
-	],
 	"workspaceFolder": "/workspace",
-	// "containerUser": "vscode"
-	// "postCreateCommand": "sudo chown 1000 /workspace",
-	// "remoteUser": "rootless",
-	// ""
-	// "runArgs": [
-	// 	"--userns=keep-id"
-	// ],
 }

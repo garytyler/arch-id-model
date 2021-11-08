@@ -21,22 +21,20 @@ log = logging.getLogger(settings.APP_NAME)
 class TrainingSession:
     def __init__(
         self,
-        dir: Path,
+        session_dir: Path,
         dataset_dir: Path,
         data_proportion: float,
         min_accuracy: float,
-        max_epochs: int,
-        profile: bool,
-        disable_tensorboard_server:bool
+        disable_tensorboard_server: bool,
     ):
-        self.dir = dir
-        self.cp_dir = self.dir / "checkpoints"
+        self.session_dir = session_dir
+        self.cp_dir = self.session_dir / "checkpoints"
         self.cp_dir.mkdir(parents=True, exist_ok=True)
-        self.sv_dir = self.dir / "saves"
+        self.sv_dir = self.session_dir / "saves"
         self.sv_dir.mkdir(parents=True, exist_ok=True)
-        self.py_dir = self.dir / "logs"
+        self.py_dir = self.session_dir / "logs"
         self.py_dir.mkdir(parents=True, exist_ok=True)
-        self.tb_dir = self.dir / "tensorboard"
+        self.tb_dir = self.session_dir / "tensorboard"
         self.tb_dir.mkdir(parents=True, exist_ok=True)
         self.dataset_dir: Path = dataset_dir
         self.data_proportion: float = data_proportion
@@ -47,6 +45,10 @@ class TrainingSession:
             raise EnvironmentError(f"Dataset dir not found: {self.dataset_dir}")
 
         self.splits_dir: Path = Path(tempfile.mkdtemp(prefix=f"{APP_NAME}-splits-"))
+        self.class_names = [
+            p.name.replace("architecture", "").replace("style", "").strip()
+            for p in sorted(self.dataset_dir.iterdir())
+        ]
 
         # Define hyperparams
         self.hp_cnn_model = hp.HParam("model", hp.Discrete(list(CNN_APPS.keys())))
@@ -62,42 +64,34 @@ class TrainingSession:
         self.training_runs = []
         for cnn_model in self.hp_cnn_model.domain.values:
             for weights in self.hp_weights.domain.values:
-                for learning_rate in self.hp_learning_rate.domain.values:
-                    self.hparam_combinations.append(
-                        {
-                            self.hp_cnn_model: cnn_model,
-                            self.hp_weights: weights,
-                            self.hp_learning_rate: learning_rate,
-                        }
+                # for learning_rate in self.hp_learning_rate.domain.values:
+                self.hparam_combinations.append(
+                    {self.hp_cnn_model: cnn_model, self.hp_weights: weights}
+                )
+                run_name = (
+                    f"{self.session_dir.name}"
+                    f"-{run_num}"
+                    f"-{cnn_model}"
+                    f"-{weights or 'none'}"
+                )
+                self.training_runs.append(
+                    TrainingRun(
+                        name=run_name,
+                        test_freq=1,
+                        splits_dir=self.splits_dir,
+                        class_names=self.class_names,
+                        metrics=[self.metric_accuracy],
+                        cnn_model=cnn_model,
+                        weights=weights,
+                        min_accuracy=min_accuracy,
+                        dataset_dir=self.dataset_dir,
+                        cp_dir=self.cp_dir / run_name,
+                        sv_dir=self.sv_dir / run_name,
+                        py_dir=self.py_dir / run_name,
+                        tb_dir=self.tb_dir / run_name,
                     )
-                    run_name = (
-                        f"{self.dir.name}"
-                        f"-{run_num}"
-                        f"-{cnn_model}"
-                        f"-{weights or 'none'}"
-                        f"-{learning_rate}"
-                    )
-                    self.training_runs.append(
-                        TrainingRun(
-                            name=run_name,
-                            max_epochs=max_epochs,
-                            profile=profile,
-                            test_freq=1,
-                            patience=80,
-                            splits_dir=self.splits_dir,
-                            metrics=[self.metric_accuracy],
-                            cnn_model=cnn_model,
-                            weights=weights,
-                            learning_rate=learning_rate,
-                            min_accuracy=min_accuracy,
-                            dataset_dir=self.dataset_dir,
-                            cp_dir=self.cp_dir / run_name,
-                            sv_dir=self.sv_dir / run_name,
-                            py_dir=self.py_dir / run_name,
-                            tb_dir=self.tb_dir / run_name,
-                        )
-                    )
-                    run_num += 1
+                )
+                run_num += 1
 
     def execute(self):
         if not self.disable_tensorboard_server:
@@ -114,7 +108,7 @@ class TrainingSession:
             str(self.tb_dir / "hparam_tuning")
         ).as_default():
             hp.hparams_config(
-                hparams=[self.hp_cnn_model, self.hp_weights, self.hp_learning_rate],
+                hparams=[self.hp_cnn_model, self.hp_weights],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 

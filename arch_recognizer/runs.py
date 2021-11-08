@@ -16,19 +16,46 @@ from .settings import SEED
 log = logging.getLogger(settings.APP_NAME)
 
 
+def create_model(name, cnn_app_model, image_size, num_classes: int, metrics: list = []):
+    # Create model
+    _model = tf.keras.models.Sequential(
+        name=name,
+        layers=[
+            tf.keras.layers.experimental.preprocessing.RandomFlip(
+                "horizontal", input_shape=(*image_size, 3)
+            ),
+            tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
+            cnn_app_model,
+            tf.keras.layers.GlobalAveragePooling2D(),
+            tf.keras.layers.Dropout(0.1),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(512, activation="relu"),
+            tf.keras.layers.Dense(
+                num_classes, activation="softmax", name="predictions"
+            ),
+        ],
+    )
+    # Compile model
+    _model.compile(
+        optimizer=tf.keras.optimizers.Adam(
+            # learning_rate=learning_rate,
+        ),
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+        metrics=metrics,
+    )
+    return _model
+
+
 class TrainingRun:
     def __init__(
         self,
         name: str,
-        max_epochs: int,
-        profile: bool,
         test_freq: int,
-        patience: float,
         cnn_model: tf.keras.Model,
         weights: str,
-        learning_rate: float,
         metrics: List[str],
         splits_dir: Path,
+        class_names: List[str],
         min_accuracy: float,
         dataset_dir: Path,
         cp_dir: Path,
@@ -38,13 +65,11 @@ class TrainingRun:
     ):
         # Set received instance attributes
         self.name: str = name
-        self.max_epochs: int = max_epochs
-        self.profile: bool = profile
+        self.max_epochs: int = 100
         self.test_freq: int = test_freq
-        self.patience: float = patience
         self.cnn_model: tf.keras.Model = cnn_model
         self.weights: str = weights
-        self.learning_rate: float = learning_rate
+        # self.learning_rate: float = learning_rate
         self.metrics: List[str] = metrics
         self.splits_dir: Path = splits_dir
         self.min_accuracy: float = min_accuracy
@@ -66,7 +91,7 @@ class TrainingRun:
 
         # Set other attributes
         self.run_status: dict = {}
-        self.class_names = list([i.name for i in self.dataset_dir.iterdir()])
+        self.class_names: List[str] = class_names
         # File writer for writing confusion matrix plots
         self.cm_file_writer = tf.summary.create_file_writer(str(self.tb_dir / "cm"))
         # File writer for writing evaluations against test data
@@ -88,40 +113,20 @@ class TrainingRun:
         strategy = tf.distribute.MirroredStrategy()
 
         # Build datasets
-        batch_size = self.cnn_batch_size * strategy.num_replicas_in_sync
-        self.train_ds = self._get_dataset("train", batch_size=batch_size)
-        self.val_ds = self._get_dataset("val", batch_size=batch_size)
-        self.test_ds = self._get_dataset("test", batch_size=batch_size)
+        self._build_datasets(
+            batch_size=self.cnn_batch_size * strategy.num_replicas_in_sync
+        )
 
         with strategy.scope():
-            # Create model
-            self.model = tf.keras.models.Sequential(
+            self.model = create_model(
                 name=self.name,
-                layers=[
-                    tf.keras.layers.experimental.preprocessing.RandomFlip(
-                        "horizontal", input_shape=(*self.cnn_image_size, 3)
-                    ),
-                    tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
-                    self.cnn_app_model(
-                        include_top=False,
-                        weights=self.weights or None,
-                        classes=len(self.class_names),
-                    ),
-                    tf.keras.layers.GlobalAveragePooling2D(),
-                    tf.keras.layers.Dropout(0.1),
-                    tf.keras.layers.Flatten(),
-                    tf.keras.layers.Dense(512, activation="relu"),
-                    tf.keras.layers.Dense(
-                        len(self.class_names),
-                        activation="softmax",
-                        name="predictions",
-                    ),
-                ],
-            )
-            # Compile model
-            self.model.compile(
-                optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate),
-                loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
+                cnn_app_model=self.cnn_app_model(
+                    include_top=False,
+                    weights=self.weights or None,
+                    classes=len(self.class_names),
+                ),
+                image_size=self.cnn_image_size,
+                num_classes=len(self.class_names),
                 metrics=self.metrics,
             )
 
@@ -142,7 +147,7 @@ class TrainingRun:
                     write_graph=True,
                     write_images=True,
                     write_steps_per_second=True,
-                    profile_batch=(2, 8) if self.profile else 0,
+                    profile_batch=0,
                 ),
                 tf.keras.callbacks.LambdaCallback(
                     on_epoch_begin=self._on_epoch_start,
@@ -151,7 +156,6 @@ class TrainingRun:
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
                     min_delta=0.0001,
-                    patience=self.patience,
                     restore_best_weights=True,
                 ),
             ],
@@ -165,11 +169,7 @@ class TrainingRun:
                 f.write(json.dumps(self.run_status))
         else:
             self.run_status.update(
-                {
-                    "reason": "early_stopped",
-                    "epoch": self.epochs_completed,
-                    "patience": self.patience,
-                }
+                {"reason": "early_stopped", "epoch": self.epochs_completed}
             )
 
         with open(self.completed_marker_path, "w") as f:
@@ -181,7 +181,12 @@ class TrainingRun:
         self._save_model_backup(self.epochs_completed, test_loss, test_accuracy)
         return test_accuracy
 
-    def _get_dataset(self, split: str, batch_size: int) -> tf.data.Dataset:
+    def _build_datasets(self, batch_size):
+        self.train_ds = self._get_dataset_split("train", batch_size=batch_size)
+        self.val_ds = self._get_dataset_split("val", batch_size=batch_size)
+        self.test_ds = self._get_dataset_split("test", batch_size=batch_size)
+
+    def _get_dataset_split(self, split: str, batch_size: int) -> tf.data.Dataset:
         _options = tf.data.Options()
         _options.experimental_distribute.auto_shard_policy = (
             tf.data.experimental.AutoShardPolicy.DATA
@@ -195,8 +200,7 @@ class TrainingRun:
             tf.keras.preprocessing.image_dataset_from_directory(
                 self.splits_dir / split,
                 labels="inferred",
-                # label_mode="int",
-                label_mode="categorical",
+                label_mode="int",
                 image_size=self.cnn_image_size,
                 batch_size=batch_size,
                 shuffle=True,
@@ -218,8 +222,10 @@ class TrainingRun:
         for batch_X, batch_y in self.test_ds:
             true_y.extend(batch_y)
             pred_y.extend(np.argmax(self.model.predict(batch_X), axis=-1))
-        cm_data = np.nan_to_num(sklearn.metrics.confusion_matrix(true_y, pred_y))
-        cm_figure = plot_confusion_matrix(cm_data, class_names=self.class_names)
+        cm_data = sklearn.metrics.confusion_matrix(true_y, pred_y)
+        cm_figure = plot_confusion_matrix(
+            np.nan_to_num(cm_data), class_names=self.class_names
+        )
         cm_image = plot_to_image(cm_figure)
         with self.cm_file_writer.as_default():
             tf.summary.image("Confusion Matrix", cm_image, step=epoch)
