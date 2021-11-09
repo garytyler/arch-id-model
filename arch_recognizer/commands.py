@@ -33,7 +33,7 @@ def _get_saved_model_dir(args):
     max_accuracy = 0.0
     model_dir = None
     for d in run_dir.iterdir():
-        accuracy = float(d.name.split("-")[7])
+        accuracy = float(d.name.split("-")[-1])
         if max_accuracy < accuracy:
             max_accuracy = accuracy
             model_dir = d
@@ -45,13 +45,15 @@ def _get_saved_model_dir(args):
 
 def _create_session(args):
     return sessions.TrainingSession(
-        session_dir=_get_session_dir(
-            output_dir=args.output_dir,
-            resume=args.session,
-            force_resume_session=True,
+        session_dir=Path(
+            _get_session_dir(
+                output_dir=args.output_dir,
+                session=args.session,
+                force_resume_session=True,
+            )
         ),
         dataset_dir=args.dataset_dir,
-        data_proportion=1.0,
+        data_proportion=0.01,
         min_accuracy=1.0,
         disable_tensorboard_server=True,
     )
@@ -90,12 +92,11 @@ def predict(args):
         img = tf.keras.preprocessing.image.load_img(
             img_path, target_size=BASE_CNNS[args.cnn].image_size
         )
-
         img_array = tf.keras.preprocessing.image.img_to_array(img)
-
         img_array = BASE_CNNS[args.cnn].preprocess(img_array)
         img_array = tf.expand_dims(img_array, 0)
         predictions = model.predict(img_array)
+        print(predictions)
         scores = tf.nn.softmax(predictions[0])
         pred_y = session.class_names[np.argmax(scores)]
         true_y = img_path.parent.name
@@ -114,7 +115,7 @@ def predict(args):
 def train(args):
     session_dir = _get_session_dir(
         output_dir=args.output_dir,
-        resume=args.resume,
+        session=args.session,
         force_resume_session=args.force_resume_session,
     )
 
@@ -126,22 +127,21 @@ def train(args):
     )
 
     # Configure eager execution of tf.function calls
-    tf.config.run_functions_eagerly(args.eager)
+    tf.config.run_functions_eagerly(False)
 
     # Start training
     trainer = sessions.TrainingSession(
         session_dir=session_dir,
         dataset_dir=args.dataset_dir,
+        batch_size=args.batch_size,
         data_proportion=args.data_proportion,
         min_accuracy=args.min_accuracy,
-        max_epochs=args.max_epochs,
-        profile=args.profile,
         disable_tensorboard_server=args.disable_tensorboard_server,
     )
     trainer.execute()
 
 
-def _get_session_dir(output_dir: Path, resume: str, force_resume_session=bool):
+def _get_session_dir(output_dir: Path, session: str, force_resume_session=bool) -> Path:
     current_commit_hash: str = _get_current_git_commit_hash()
     session_commit_hash_file_name: str = "commit_hash"
 
@@ -156,7 +156,7 @@ def _get_session_dir(output_dir: Path, resume: str, force_resume_session=bool):
     ]
 
     # Handle no resume request
-    if resume is None:
+    if session is None:
         if not len(existing_sessions):
             session_dir = output_dir / "0001"
         else:
@@ -165,12 +165,12 @@ def _get_session_dir(output_dir: Path, resume: str, force_resume_session=bool):
         with open(session_dir / session_commit_hash_file_name, "w") as f:
             f.write(current_commit_hash)
         return session_dir
-    elif resume is -1:
+    elif session is -1:
         session_dir = output_dir / f"{sorted(existing_sessions)[-1]:04}"
-    elif resume not in existing_sessions:
-        raise ValueError(f"Session {resume:04} not found")
+    elif session not in existing_sessions:
+        raise ValueError(f"Session {session:04} not found")
     else:
-        session_dir = output_dir / f"{resume:04}"
+        session_dir = output_dir / f"{session:04}"
 
     if force_resume_session:
         return session_dir
@@ -189,14 +189,14 @@ def _get_session_dir(output_dir: Path, resume: str, force_resume_session=bool):
         existing_commit_hash = f.readlines()[0].strip()
     if current_commit_hash != existing_commit_hash:
         print(
-            f"Cannot resume session {resume:04}. Commit hashes don't match:\n"
+            f"Cannot resume session {session:04}. Commit hashes don't match:\n"
             f" Current: {existing_commit_hash}\n"
             f" Session: {current_commit_hash}\n"
             f"Aborting."
         )
         sys.exit()
 
-    return session_dir
+    return Path(session_dir)
 
 
 def _get_current_git_commit_hash():

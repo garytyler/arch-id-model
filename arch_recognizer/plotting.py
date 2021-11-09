@@ -6,10 +6,13 @@ import numpy as np
 import tensorflow as tf
 
 
-def plot_to_image(figure):
+def plot_to_image(figure, file_name=None):
     """Converts the matplotlib plot specified by 'figure' to a PNG image and
     returns it. The supplied figure is closed and inaccessible after this call.
     """
+    # Save the plot to a file
+    if file_name:
+        plt.savefig(file_name)
     # Save the plot to a PNG in memory.
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
@@ -21,6 +24,7 @@ def plot_to_image(figure):
     image = tf.image.decode_png(buf.getvalue(), channels=4)
     # Add the batch dimension
     image = tf.expand_dims(image, 0)
+
     return image
 
 
@@ -51,4 +55,5 @@ def plot_confusion_matrix(cm, class_names):
     plt.tight_layout()
     plt.ylabel("True label")
     plt.xlabel("Predicted label")
+
     return figure

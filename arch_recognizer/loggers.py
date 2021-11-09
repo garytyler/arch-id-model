@@ -15,7 +15,7 @@ app_log_formatter = logging.Formatter(
 
 
 def initialize_loggers(
-    app_log_level: Union[str, int], tf_log_level: Union[str, int], logs_dir: Path = None
+    app_log_level: Union[str, int], tf_log_level: Union[str, int], log_dir: Path = None
 ):
     app_log_level = (
         app_log_level.upper() if isinstance(app_log_level, str) else app_log_level
@@ -40,9 +40,9 @@ def initialize_loggers(
     tf_log.setLevel(tf_log_level)
     tf_log.addHandler(tf_log_stream_handler)
 
-    if logs_dir:
+    if log_dir:
         session_log_path = (
-            logs_dir / f"{datetime.datetime.now().strftime(TIMESTAMP_FORMAT)}.log"
+            log_dir / f"{datetime.datetime.now().strftime(TIMESTAMP_FORMAT)}.log"
         )
         session_log_path.parent.mkdir(parents=True, exist_ok=True)
         session_log_file_handler = logging.FileHandler(session_log_path)

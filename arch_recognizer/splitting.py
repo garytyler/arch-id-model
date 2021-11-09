@@ -20,7 +20,7 @@ def generate_dataset_splits(
     dst_files.update({k: {} for k in ratios})
 
     # Generate new
-    for src_class_dir in src_dir.iterdir():
+    for src_class_dir in [i for i in src_dir.iterdir() if i.is_dir()]:
         src_class_files = list(src_class_dir.iterdir())
         src_class_count = round(len(src_class_files) * proportion)
 

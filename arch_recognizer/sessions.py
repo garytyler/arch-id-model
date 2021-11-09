@@ -22,20 +22,24 @@ class TrainingSession:
         self,
         session_dir: Path,
         dataset_dir: Path,
+        batch_size: int,
         data_proportion: float,
         min_accuracy: float,
         disable_tensorboard_server: bool,
     ):
-        self.session_dir = session_dir
+        self.session_dir: Path = session_dir
         self.cp_dir = self.session_dir / "checkpoints"
         self.cp_dir.mkdir(parents=True, exist_ok=True)
-        self.sv_dir = self.session_dir / "saves"
+        self.sv_dir = self.session_dir / "models"
         self.sv_dir.mkdir(parents=True, exist_ok=True)
         self.py_dir = self.session_dir / "logs"
         self.py_dir.mkdir(parents=True, exist_ok=True)
         self.tb_dir = self.session_dir / "tensorboard"
         self.tb_dir.mkdir(parents=True, exist_ok=True)
+        self.cm_dir = self.session_dir / "confusion"
+        self.cm_dir.mkdir(parents=True, exist_ok=True)
         self.dataset_dir: Path = dataset_dir
+        self.batch_size: int = batch_size
         self.data_proportion: float = data_proportion
         self.min_accuracy: float = min_accuracy
         self.disable_tensorboard_server = disable_tensorboard_server
@@ -44,13 +48,10 @@ class TrainingSession:
             raise EnvironmentError(f"Dataset dir not found: {self.dataset_dir}")
 
         self.splits_dir: Path = Path(tempfile.mkdtemp(prefix=f"{APP_NAME}-splits-"))
-        self.class_names = [
-            p.name.replace("architecture", "").replace("style", "").strip()
-            for p in sorted(self.dataset_dir.iterdir())
-        ]
+        self.class_names = [i for i in sorted(self.dataset_dir.iterdir()) if i.is_dir()]
 
         # Define hyperparams
-        self.hp_base_cnn = hp.HParam("cnn", hp.Discrete(list(BASE_CNNS.values())))
+        self.hp_base_cnn = hp.HParam("base_cnn", hp.Discrete(list(BASE_CNNS.keys())))
         self.hp_weights = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
         self.hp_learning_rate = hp.HParam(
             "learning_rate", hp.Discrete([float(1e-3), float(2e-3)])
@@ -68,9 +69,10 @@ class TrainingSession:
                     {self.hp_base_cnn: base_cnn, self.hp_weights: weights}
                 )
                 run_name = (
+                    # f"{os.path.basename(str(self.session_dir))}"
                     f"{self.session_dir.name}"
                     f"-{run_num}"
-                    f"-{base_cnn.name}"
+                    f"-{BASE_CNNS[base_cnn].name}"
                     f"-{weights or 'none'}"
                 )
                 self.training_runs.append(
@@ -80,14 +82,16 @@ class TrainingSession:
                         splits_dir=self.splits_dir,
                         class_names=self.class_names,
                         metrics=[self.metric_accuracy],
-                        base_cnn=base_cnn,
+                        base_cnn=BASE_CNNS[base_cnn],
                         weights=weights,
                         min_accuracy=min_accuracy,
                         dataset_dir=self.dataset_dir,
+                        batch_size=self.batch_size,
                         cp_dir=self.cp_dir / run_name,
                         sv_dir=self.sv_dir / run_name,
                         py_dir=self.py_dir / run_name,
                         tb_dir=self.tb_dir / run_name,
+                        cm_dir=self.cm_dir / run_name,
                     )
                 )
                 run_num += 1

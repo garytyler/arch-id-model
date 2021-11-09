@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from pathlib import Path
 from typing import List
 
@@ -27,28 +28,31 @@ class TrainingRun:
         class_names: List[str],
         min_accuracy: float,
         dataset_dir: Path,
+        batch_size: int,
         cp_dir: Path,
         sv_dir: Path,
         py_dir: Path,
         tb_dir: Path,
+        cm_dir: Path,
     ):
         # Set received instance attributes
         self.name: str = name
-        self.max_epochs: int = 100
+        self.max_epochs: int = 300
         self.test_freq: int = test_freq
         self.base_cnn: BaseCNN = base_cnn
         self.weights: str = weights
-        # self.learning_rate: float = learning_rate
         self.metrics: List[str] = metrics
         self.splits_dir: Path = splits_dir
         self.min_accuracy: float = min_accuracy
         self.dataset_dir: Path = dataset_dir
+        self.batch_size: int = batch_size
 
         # Set logs dir paths
         self.cp_dir: Path = cp_dir
         self.bu_dir: Path = sv_dir
         self.py_dir: Path = py_dir
         self.tb_dir: Path = tb_dir
+        self.cm_dir: Path = cm_dir
         self.completed_marker_path = Path(self.cp_dir / "completed")
 
         # Set other attributes
@@ -70,14 +74,15 @@ class TrainingRun:
         self.cp_dir.mkdir(parents=True, exist_ok=True)
         self.py_dir.mkdir(parents=True, exist_ok=True)
         self.tb_dir.mkdir(parents=True, exist_ok=True)
+        self.cm_dir.mkdir(parents=True, exist_ok=True)
 
         # Set strategy
         strategy = tf.distribute.MirroredStrategy()
 
         # Build datasets
-        self._build_datasets(
-            batch_size=self.base_cnn.batch_size * strategy.num_replicas_in_sync
-        )
+        self.train_ds = self._get_dataset_split("train")
+        self.val_ds = self._get_dataset_split("val")
+        self.test_ds = self._get_dataset_split("test")
 
         with strategy.scope():
             # Create model
@@ -104,9 +109,7 @@ class TrainingRun:
             )
             # Compile model
             self.model.compile(
-                optimizer=tf.keras.optimizers.Adam(
-                    # learning_rate=learning_rate,
-                ),
+                optimizer=tf.keras.optimizers.Adam(),
                 loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
                 metrics=self.metrics,
             )
@@ -136,8 +139,9 @@ class TrainingRun:
                 ),
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
+                    patience=20,
                     min_delta=0.0001,
-                    restore_best_weights=True,
+                    restore_best_weights=False,
                 ),
             ],
         )
@@ -162,12 +166,7 @@ class TrainingRun:
         self._save_model_backup(self.epochs_completed, test_loss, test_accuracy)
         return test_accuracy
 
-    def _build_datasets(self, batch_size):
-        self.train_ds = self._get_dataset_split("train", batch_size=batch_size)
-        self.val_ds = self._get_dataset_split("val", batch_size=batch_size)
-        self.test_ds = self._get_dataset_split("test", batch_size=batch_size)
-
-    def _get_dataset_split(self, split: str, batch_size: int) -> tf.data.Dataset:
+    def _get_dataset_split(self, split: str) -> tf.data.Dataset:
         _options = tf.data.Options()
         _options.experimental_distribute.auto_shard_policy = (
             tf.data.experimental.AutoShardPolicy.DATA
@@ -183,7 +182,7 @@ class TrainingRun:
                 labels="inferred",
                 label_mode="int",
                 image_size=self.base_cnn.image_size,
-                batch_size=batch_size,
+                batch_size=self.batch_size,
                 shuffle=True,
                 seed=SEED,
             )
@@ -205,9 +204,13 @@ class TrainingRun:
             pred_y.extend(np.argmax(self.model.predict(batch_X), axis=-1))
         cm_data = sklearn.metrics.confusion_matrix(true_y, pred_y)
         cm_figure = plot_confusion_matrix(
-            np.nan_to_num(cm_data), class_names=self.class_names
+            np.nan_to_num(cm_data),
+            class_names=[
+                os.path.basename(i).replace("architecture", "").replace("style", "")
+                for i in self.class_names
+            ],
         )
-        cm_image = plot_to_image(cm_figure)
+        cm_image = plot_to_image(cm_figure, file_name=self.cm_dir / f"{epoch}.png")
         with self.cm_file_writer.as_default():
             tf.summary.image("Confusion Matrix", cm_image, step=epoch)
 

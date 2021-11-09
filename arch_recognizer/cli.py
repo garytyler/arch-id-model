@@ -97,6 +97,12 @@ def get_parser():
         help="min test accuracy for which to save model (default: %(default)s)",
     )
     parser_train.add_argument(
+        "--batch-size",
+        default=16,
+        type=int,
+        help="batch size for training (default: %(default)s)",
+    )
+    parser_train.add_argument(
         "--proportion",
         dest="data_proportion",
         default=1.0,
