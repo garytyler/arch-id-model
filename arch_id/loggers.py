@@ -24,7 +24,7 @@ def initialize_loggers(
         tf_log_level.upper() if isinstance(tf_log_level, str) else tf_log_level
     )
 
-    # Configure arch-recognizer logger
+    # Configure app logger
     app_log_stream_handler = logging.StreamHandler(sys.stdout)
     app_log_stream_handler.setFormatter(app_log_formatter)
     app_log = logging.getLogger(APP_NAME)

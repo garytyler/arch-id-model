@@ -4,10 +4,10 @@ services:
     container_name: devcontainer
     build:
       context: .
-      target: dev-stage
+      target: development
     command: /bin/sh -c "while sleep 1000; do :; done"
     volumes:
-      - ".:/workspace"
+      - ".:/srv"
     environment:
       - "NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-}"
       - "CUDA_DEVICE_ORDER=PCI_BUS_ID"

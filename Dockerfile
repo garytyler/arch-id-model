@@ -1,8 +1,8 @@
 # Build training environment
-FROM tensorflow/tensorflow:2.6.0-gpu-jupyter AS train-stage
+FROM tensorflow/tensorflow:2.6.0-gpu-jupyter AS training
 
 # Set working dir
-WORKDIR /workspace/
+WORKDIR /srv
 
 # Upgrade pip and install project dependencies from pip
 RUN pip install --upgrade pip
@@ -12,7 +12,7 @@ RUN pip install -U \
     tensorboard-plugin-profile==2.5.0
 
 # Build development environment
-FROM train-stage AS dev-stage
+FROM training AS development
 
 # Update apt packages
 RUN apt-get update

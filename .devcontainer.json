@@ -1,10 +1,11 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.194.3/containers/docker-existing-docker-compose
 {
+	"name": "arch-id-model",
 	"dockerComposeFile": [
-		"../docker-compose.dev.yml",
-		"./docker-compose.vscode.yml",
+		"./docker-compose.dev.yml",
 	],
+	"workspaceFolder": "/srv",
 	"service": "devcontainer",
 	"settings": {
 		"terminal.integrated.profiles.linux": {
@@ -16,5 +17,4 @@
 			},
 		},
 	},
-	"workspaceFolder": "/workspace",
 }

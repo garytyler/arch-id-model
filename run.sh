@@ -3,7 +3,7 @@
 set -e
 
 THIS_DIR=$(realpath $(dirname $0))
-IMAGE_NAME=arch-recognizer
+IMAGE_NAME=arch-id
 
 if [[ "${@}" =~ .*([ ]-d[ =]|[ ]--dataset-dir[ =]).* ]]; then
     echo 'Use DATASET_DIR environment variable instead of -d/--dataset-dir arguments'
@@ -25,11 +25,16 @@ echo $NVIDIA_VISIBLE_DEVICES
 RUN_CMD=(
     docker run
     --publish=6006:6006
-    -v="${THIS_DIR?}:/workspace:rw"                                               # mount ./ to /workspace
-    $(if [ -d "${THIS_DIR}/dataset" ]; then echo "-v=:/workspace/dataset:ro"; fi) # if /workspace/dataset exists, void it with an empty volume
-    $(if [ -d "${THIS_DIR}/output" ]; then echo "-v=:/workspace/output:ro"; fi)   # if /workspace/output exists, void it with an empty volume
-    -v="${DATASET_DIR:-${THIS_DIR}/dataset}:/dataset:ro"                          # if DATASET_DIR is given, mount it to /dataset, else mount ./dataset to /dataset
-    -v="${OUTPUT_DIR:-${THIS_DIR}/output}:/output"                                # if OUTPUT_DIR is given, mount it to /output, else bind ./output to /output
+    # mount ./ to /srv
+    -v="${THIS_DIR?}:/srv:rw"
+    # if /srv/dataset exists, void it with an empty volume
+    $(if [ -d "${THIS_DIR}/dataset" ]; then echo "-v=:/srv/dataset:ro"; fi)
+    # if /srv/output exists, void it with an empty volume
+    $(if [ -d "${THIS_DIR}/output" ]; then echo "-v=:/srv/output:ro"; fi)
+    # if DATASET_DIR is given, mount it to /dataset, else mount ./dataset to /dataset
+    -v="${DATASET_DIR:-${THIS_DIR}/dataset}:/dataset:ro"
+    # if OUTPUT_DIR is given, mount it to /output, else bind ./output to /output
+    -v="${OUTPUT_DIR:-${THIS_DIR}/output}:/output"
     --gpus="${GPUS:-all}"
     --env="NVIDIA_DRIVER_CAPABILITIES=compute,utility"
     --env="CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES?}"
@@ -41,7 +46,7 @@ RUN_CMD=(
     --rm
     --name training
     -- ${IMAGE_NAME}
-    python -m arch_recognizer
+    python -m arch_id
     "--dataset-dir=/dataset"
     "--output-dir=/output"
     ${@}

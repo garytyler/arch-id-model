@@ -4,7 +4,7 @@ from typing import Callable, Tuple
 
 import tensorflow as tf
 
-APP_NAME: str = "arch-recognizer"
+APP_NAME: str = "arch-id"
 TIMESTAMP_FORMAT: str = r"%Y-%m-%d-%H:%M:%S"
 DEFAULT_LOG_LEVEL = logging.INFO
 SEED = 123456
