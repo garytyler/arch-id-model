@@ -3,7 +3,7 @@
 set -e
 
 THIS_DIR=$(realpath $(dirname $0))
-IMAGE_NAME=arch-id
+IMAGE_NAME=arch-id-model
 
 if [[ "${@}" =~ .*([ ]-d[ =]|[ ]--dataset-dir[ =]).* ]]; then
     echo 'Use DATASET_DIR environment variable instead of -d/--dataset-dir arguments'
@@ -16,8 +16,8 @@ if [[ "${@}" =~ .*([ ]-o[ =]|[ ]--output-dir[ =]).* ]]; then
 fi
 
 docker build \
-    --tag ${IMAGE_NAME} \
-    --target=train-stage \
+    --tag=${IMAGE_NAME} \
+    --target=training \
     --build-arg="USERNAME=$(whoami)" \
     -- ${THIS_DIR}/
 
@@ -44,7 +44,7 @@ RUN_CMD=(
     --env="TF_CPP_MIN_LOG_LEVEL=${TF_CPP_MIN_LOG_LEVEL:-2}"
     --env="TF_ENABLE_AUTO_MIXED_PRECISION=${TF_ENABLE_AUTO_MIXED_PRECISION:-1}"
     --rm
-    --name training
+    --name=training
     -- ${IMAGE_NAME}
     python -m arch_id
     "--dataset-dir=/dataset"

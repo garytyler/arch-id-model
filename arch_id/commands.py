@@ -1,115 +1,16 @@
 import logging
-import os
-import random
 import subprocess as sp
 import sys
 from pathlib import Path
 from typing import List
 
-import numpy as np
 import tensorflow as tf
 
 from . import sessions
 from .loggers import initialize_loggers
-from .settings import APP_NAME, BASE_CNNS, BASE_DIR, SEED
-from .splitting import generate_dataset_splits
+from .settings import APP_NAME, BASE_DIR
 
 log = logging.getLogger(APP_NAME)
-
-
-def _get_saved_model_dir(args):
-    session_models_dir = Path(args.output_dir / f"{int(args.session):04}" / "saves")
-    run_dir = None
-    for d in sorted(list(session_models_dir.iterdir())):
-        if d.name.split("-")[2] == args.cnn and d.name.split("-")[3] == args.weights:
-            run_dir = d
-            break
-
-    if not run_dir:
-        raise RuntimeError(
-            f"Specified run dir not found in session models dir {session_models_dir}"
-        )
-
-    max_accuracy = 0.0
-    model_dir = None
-    for d in run_dir.iterdir():
-        accuracy = float(d.name.split("-")[-1])
-        if max_accuracy < accuracy:
-            max_accuracy = accuracy
-            model_dir = d
-
-    if not model_dir:
-        raise RuntimeError(f"Specified model dir not found in run dir {run_dir}")
-    return model_dir
-
-
-def _create_session(args):
-    return sessions.TrainingSession(
-        session_dir=Path(
-            _get_session_dir(
-                output_dir=args.output_dir,
-                session=args.session,
-                force_resume_session=True,
-            )
-        ),
-        dataset_dir=args.dataset_dir,
-        data_proportion=0.01,
-        min_accuracy=1.0,
-        disable_tensorboard_server=True,
-    )
-
-
-def predict(args):
-    # Initialize loggers
-    initialize_loggers(
-        app_log_level=args.log_level,
-        tf_log_level=args.tf_log_level,
-    )
-
-    log.info("Parsing saved model location...")
-    model_dir = _get_saved_model_dir(args)
-
-    log.info(f"Loading saved model {model_dir.name}")
-    model = tf.keras.models.load_model(model_dir)
-
-    log.info("Generating test data...")
-    session = _create_session(args)
-    generate_dataset_splits(
-        src_dir=session.dataset_dir,
-        dst_dir=session.splits_dir,
-        seed=SEED,
-        proportion=0.1,
-    )
-    test_files = [
-        os.path.join(path, filename)
-        for path, _, files in os.walk(session.splits_dir / "test")
-        for filename in files
-        if filename.lower().endswith(".jpg")
-    ]
-
-    log.info("Generating predictions...")
-    for img_path in [Path(random.choice(test_files)) for _ in range(args.count)]:
-        img = tf.keras.preprocessing.image.load_img(
-            img_path, target_size=BASE_CNNS[args.cnn].image_size
-        )
-        img_array = tf.keras.preprocessing.image.img_to_array(img)
-        img_array = BASE_CNNS[args.cnn].preprocess(img_array)
-        img_array = tf.expand_dims(img_array, 0)
-        predictions = model.predict(img_array)
-        print(predictions)
-        scores = tf.nn.softmax(predictions[0])
-        pred_y = session.class_names[np.argmax(scores)]
-        true_y = img_path.parent.name
-        print(
-            f"path: {img_path}"
-            f"\npred: {pred_y}"
-            f"\ntrue: {true_y}"
-            f"\nconf: {100 * np.max(scores):.2f}%",
-            *(
-                f"\n\t{n:0>2}-{session.class_names[n]:.<25}{100 * i:.2f}%"
-                for n, i in enumerate(scores)
-            ),
-        )
 
 
 def train(args):

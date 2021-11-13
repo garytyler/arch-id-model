@@ -43,41 +43,6 @@ def get_parser():
     # create subparsers
     subparsers = parser.add_subparsers(help="sub-command help")
 
-    # predict command
-    parser_predict = subparsers.add_parser("predict", help="predict model")
-    parser_predict.set_defaults(func=commands.predict)
-    parser_predict.add_argument(
-        "-s",
-        "--session",
-        const=-1,
-        nargs="?",
-        type=int,
-        help="resume last session or specified session (default: %(default)s)",
-    )
-    parser_predict.add_argument(
-        "-m",
-        "--cnn",
-        default="InceptionResNetV2",
-        type=str,
-        choices=BASE_CNNS.keys(),
-        help="tensorflow log level (default: %(default)s)",
-    )
-    parser_predict.add_argument(
-        "-w",
-        "--weights",
-        default="imagenet",
-        type=str,
-        choices=WEIGHTS,
-        help="tensorflow log level (default: %(default)s)",
-    )
-    parser_predict.add_argument(
-        "-i",
-        "--count",
-        default=1,
-        type=int,
-        help="number of test images to predict (default: %(default)s)",
-    )
-
     # train command
     parser_train = subparsers.add_parser("train", help="train model")
     parser_train.set_defaults(func=commands.train)
