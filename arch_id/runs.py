@@ -139,7 +139,9 @@ class TrainingRun:
                 ),
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
-                    patience=50,
+                    monitor="val_accuracy",
+                    patience=100,
+                    verbose=True,
                     min_delta=0.0001,
                     restore_best_weights=False,
                 ),
