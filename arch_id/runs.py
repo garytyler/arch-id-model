@@ -37,7 +37,7 @@ class TrainingRun:
     ):
         # Set received instance attributes
         self.name: str = name
-        self.max_epochs: int = 300
+        self.max_epochs: int = 500
         self.test_freq: int = test_freq
         self.base_cnn: BaseCNN = base_cnn
         self.weights: str = weights
@@ -140,7 +140,7 @@ class TrainingRun:
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
                     monitor="val_accuracy",
-                    patience=100,
+                    patience=80,
                     verbose=True,
                     min_delta=0.0001,
                     restore_best_weights=False,
