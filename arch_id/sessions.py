@@ -48,7 +48,9 @@ class TrainingSession:
             raise EnvironmentError(f"Dataset dir not found: {self.dataset_dir}")
 
         self.splits_dir: Path = Path(tempfile.mkdtemp(prefix=f"{APP_NAME}-splits-"))
-        self.class_names = [i for i in sorted(self.dataset_dir.iterdir()) if i.is_dir()]
+        self.class_names = [
+            i.name for i in sorted(self.dataset_dir.iterdir()) if i.is_dir()
+        ]
 
         # Define hyperparams
         self.hp_base_cnn = hp.HParam("base_cnn", hp.Discrete(list(BASE_CNNS.keys())))
@@ -82,6 +84,7 @@ class TrainingSession:
                         splits_dir=self.splits_dir,
                         class_names=self.class_names,
                         metrics=[self.metric_accuracy],
+                        metric_accuracy=self.metric_accuracy,
                         base_cnn=BASE_CNNS[base_cnn],
                         weights=weights,
                         min_accuracy=min_accuracy,
@@ -107,29 +110,28 @@ class TrainingSession:
             proportion=self.data_proportion,
         )
 
-        with tf.summary.create_file_writer(
-            str(self.tb_dir / "hparam_tuning")
-        ).as_default():
+        hp_dir = self.tb_dir / "hparam_tuning"
+        with tf.summary.create_file_writer(str(hp_dir)).as_default():
             hp.hparams_config(
                 hparams=[self.hp_base_cnn, self.hp_weights],
                 metrics=[hp.Metric(self.metric_accuracy, display_name="Accuracy")],
             )
 
-        for hparams, training_run in zip(self.hparam_combinations, self.training_runs):
-            self._set_run_log_file(training_run.py_dir / f"{training_run.name}.log")
-            if training_run.is_completed():
+        for hparams, run in zip(self.hparam_combinations, self.training_runs):
+            self._set_run_log_file(run.py_dir / f"{run.name}.log")
+            if run.is_completed():
                 continue
             # Perform all training in tb file writer context to send full stats
-            with tf.summary.create_file_writer(str(self.tb_dir)).as_default():
+            with tf.summary.create_file_writer(str(hp_dir / run.name)).as_default():
                 hp.hparams(hparams)
 
                 try:
-                    accuracy = training_run.execute()
+                    accuracy = run.execute()
                 except Exception as err:
                     log.error(err)
                     raise err
-
-                tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
+                else:
+                    tf.summary.scalar(self.metric_accuracy, accuracy, step=1)
 
     def __del__(self):
         try:
@@ -150,6 +152,8 @@ class TrainingSession:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        tb.configure(argv=[None, f"--logdir={str(self.tb_dir)}", "--bind_all"])
+        tb.configure(
+            argv=[None, f"--logdir={str(self.tb_dir)}", "--bind_all", "--port=6007"]
+        )
         url = tb.launch()
         log.info(f"Tensorflow listening on {url}")

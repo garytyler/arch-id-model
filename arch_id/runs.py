@@ -24,6 +24,7 @@ class TrainingRun:
         base_cnn: BaseCNN,
         weights: str,
         metrics: List[str],
+        metric_accuracy: str,
         splits_dir: Path,
         class_names: List[str],
         min_accuracy: float,
@@ -42,6 +43,7 @@ class TrainingRun:
         self.base_cnn: BaseCNN = base_cnn
         self.weights: str = weights
         self.metrics: List[str] = metrics
+        self.metric_accuracy: str = metric_accuracy
         self.splits_dir: Path = splits_dir
         self.min_accuracy: float = min_accuracy
         self.dataset_dir: Path = dataset_dir
@@ -140,7 +142,7 @@ class TrainingRun:
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
                 tf.keras.callbacks.EarlyStopping(
                     monitor="val_accuracy",
-                    patience=80,
+                    patience=50,
                     verbose=True,
                     min_delta=0.0001,
                     restore_best_weights=False,
@@ -163,10 +165,8 @@ class TrainingRun:
             f.write(json.dumps(self.run_status))
         log.info(f"Training run done: {self.run_status['reason']}")
 
-        # Return accuracy value for hparams metric
-        test_loss, test_accuracy = self.model.evaluate(self.test_ds)
-        self._save_model_backup(self.epochs_completed, test_loss, test_accuracy)
-        return test_accuracy
+        # Return best accuracy value for hparams metric
+        return self.accuracy_best
 
     def _get_dataset_split(self, split: str) -> tf.data.Dataset:
         _options = tf.data.Options()
@@ -232,8 +232,10 @@ class TrainingRun:
             epoch, write_to_tensorboard=True
         )
 
-        if test_accuracy >= self.accuracy_best and test_accuracy >= self.min_accuracy:
-            self._save_model_backup(epoch, test_loss, test_accuracy)
+        if test_accuracy >= self.accuracy_best:
+            self.accuracy_best = test_accuracy
+            if test_accuracy >= self.min_accuracy:
+                self._save_model(epoch, test_loss, test_accuracy)
 
     def _evaluate_against_test_data(
         self, epoch: int, write_to_tensorboard: bool = False
@@ -252,8 +254,8 @@ class TrainingRun:
                 tf.summary.scalar("test_accuracy", test_accuracy, step=epoch)
         return test_loss, test_accuracy
 
-    def _save_model_backup(self, epoch, test_loss, test_accuracy):
-        log.info("Saving model backup...")
+    def _save_model(self, epoch, test_loss, test_accuracy):
+        log.info("Saving model...")
         path = self.bu_dir / f"{self.name}-{epoch}-{test_loss:.4f}-{test_accuracy:.4f}"
         self.model.save(
             filepath=path,
@@ -266,4 +268,4 @@ class TrainingRun:
             ),
             save_traces=True,
         )
-        log.info(f"Model backup saved: {path.name}")
+        log.info(f"Model saved: {path.name}")
