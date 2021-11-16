@@ -35,6 +35,7 @@ def train(args):
         session_dir=session_dir,
         dataset_dir=args.dataset_dir,
         batch_size=args.batch_size,
+        max_epochs=args.max_epochs,
         data_proportion=args.data_proportion,
         min_accuracy=args.min_accuracy,
         disable_tensorboard_server=args.disable_tensorboard_server,

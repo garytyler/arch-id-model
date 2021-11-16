@@ -68,6 +68,12 @@ def get_parser():
         help="batch size for training (default: %(default)s)",
     )
     parser_train.add_argument(
+        "--max-epochs",
+        default=350,
+        type=int,
+        help="max epochs to train for (default: %(default)s)",
+    )
+    parser_train.add_argument(
         "--proportion",
         dest="data_proportion",
         default=1.0,

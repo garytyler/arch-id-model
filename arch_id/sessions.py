@@ -23,6 +23,7 @@ class TrainingSession:
         session_dir: Path,
         dataset_dir: Path,
         batch_size: int,
+        max_epochs: int,
         data_proportion: float,
         min_accuracy: float,
         disable_tensorboard_server: bool,
@@ -39,6 +40,7 @@ class TrainingSession:
         self.cm_dir = self.session_dir / "confusion"
         self.cm_dir.mkdir(parents=True, exist_ok=True)
         self.dataset_dir: Path = dataset_dir
+        self.max_epochs: int = max_epochs
         self.batch_size: int = batch_size
         self.data_proportion: float = data_proportion
         self.min_accuracy: float = min_accuracy
@@ -54,7 +56,7 @@ class TrainingSession:
 
         # Define hyperparams
         self.hp_base_cnn = hp.HParam("base_cnn", hp.Discrete(list(BASE_CNNS.keys())))
-        self.hp_weights = hp.HParam("weights", hp.Discrete(["", "imagenet"]))
+        self.hp_weights = hp.HParam("weights", hp.Discrete(["imagenet", "none"]))
         self.hp_learning_rate = hp.HParam(
             "learning_rate", hp.Discrete([float(1e-3), float(2e-3)])
         )
@@ -71,7 +73,6 @@ class TrainingSession:
                     {self.hp_base_cnn: base_cnn, self.hp_weights: weights}
                 )
                 run_name = (
-                    # f"{os.path.basename(str(self.session_dir))}"
                     f"{self.session_dir.name}"
                     f"-{run_num}"
                     f"-{BASE_CNNS[base_cnn].name}"
@@ -82,6 +83,7 @@ class TrainingSession:
                         name=run_name,
                         test_freq=1,
                         splits_dir=self.splits_dir,
+                        max_epochs=self.max_epochs,
                         class_names=self.class_names,
                         metrics=[self.metric_accuracy],
                         metric_accuracy=self.metric_accuracy,

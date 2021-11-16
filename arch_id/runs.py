@@ -30,6 +30,7 @@ class TrainingRun:
         min_accuracy: float,
         dataset_dir: Path,
         batch_size: int,
+        max_epochs: int,
         cp_dir: Path,
         sv_dir: Path,
         py_dir: Path,
@@ -38,7 +39,7 @@ class TrainingRun:
     ):
         # Set received instance attributes
         self.name: str = name
-        self.max_epochs: int = 500
+        self.max_epochs: int = max_epochs
         self.test_freq: int = test_freq
         self.base_cnn: BaseCNN = base_cnn
         self.weights: str = weights
@@ -97,7 +98,9 @@ class TrainingRun:
                     tf.keras.layers.experimental.preprocessing.RandomZoom(0.2),
                     self.base_cnn.base_model(
                         include_top=False,
-                        weights=self.weights or None,
+                        weights=None
+                        if self.weights.lower() == "none"
+                        else self.weights,
                         classes=len(self.class_names),
                     ),
                     tf.keras.layers.GlobalAveragePooling2D(),
@@ -140,13 +143,6 @@ class TrainingRun:
                     on_epoch_end=self._on_epoch_end,
                 ),
                 tf.keras.callbacks.experimental.BackupAndRestore(self.cp_dir),
-                tf.keras.callbacks.EarlyStopping(
-                    monitor="val_accuracy",
-                    patience=50,
-                    verbose=True,
-                    min_delta=0.0001,
-                    restore_best_weights=False,
-                ),
             ],
         )
 
