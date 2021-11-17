@@ -57,7 +57,7 @@ def get_parser():
     parser_train.add_argument(
         "-a",
         "--min-accuracy",
-        default=0.6,
+        default=0.4,
         type=float,
         help="min test accuracy for which to save model (default: %(default)s)",
     )
@@ -69,7 +69,7 @@ def get_parser():
     )
     parser_train.add_argument(
         "--max-epochs",
-        default=350,
+        default=500,
         type=int,
         help="max epochs to train for (default: %(default)s)",
     )
