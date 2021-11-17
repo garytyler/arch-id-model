@@ -154,8 +154,6 @@ class TrainingSession:
 
     def _launch_tensorboard(self):
         tb = tensorboard.program.TensorBoard()
-        tb.configure(
-            argv=[None, f"--logdir={str(self.tb_dir)}", "--bind_all", "--port=6007"]
-        )
+        tb.configure(argv=[None, f"--logdir={str(self.tb_dir)}", "--bind_all"])
         url = tb.launch()
         log.info(f"Tensorflow listening on {url}")
