@@ -92,8 +92,8 @@ def _get_session_dir(output_dir: Path, session: str, force_resume_session=bool) 
     if current_commit_hash != existing_commit_hash:
         print(
             f"Cannot resume session {session:04}. Commit hashes don't match:\n"
-            f" Current: {existing_commit_hash}\n"
-            f" Session: {current_commit_hash}\n"
+            f" Current: {current_commit_hash}\n"
+            f" Session: {existing_commit_hash}\n"
             f"Aborting."
         )
         sys.exit()
