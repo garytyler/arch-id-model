@@ -37,7 +37,7 @@ RUN_CMD=(
     -v="${OUTPUT_DIR:-${THIS_DIR}/output}:/output"
     --gpus="${GPUS:-all}"
     --env="NVIDIA_DRIVER_CAPABILITIES=compute,utility"
-    --env="CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES?}"
+    --env="CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-0}"
     --env="CUDA_DEVICE_ORDER=PCI_BUS_ID"
     --env="TF_FORCE_GPU_ALLOW_GROWTH=true"
     --env="TF_GPU_THREAD_MODE=gpu_private"
