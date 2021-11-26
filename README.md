@@ -1,6 +1,9 @@
 <div align="center">
 <h1>arch-id-model</h1>
-<h3>CLI program for training the data model used by https://ArchitectureID.ai</h3>
+<h3><a href="https://architectureid.ai">ArchitectureID.ai</a>’s data model development.</h3>
+<i>For the <a href="https://architectureid.ai" target="_blank">ArchitectureID.ai</a> web application repo, see <a href="https://github.com/garytyler/arch-id-web" target="_blank">arch-id-web</a>.</i>
+<br/>
+<br/>
 </div>
 
 # Quick Start

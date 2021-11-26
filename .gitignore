@@ -16,3 +16,4 @@
 !/arch_id/**/*.py
 !/run.sh
 !/README.md
+!/LICENSE.md
