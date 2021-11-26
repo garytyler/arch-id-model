@@ -1,21 +1,35 @@
-# Development
+<div align="center">
+<h1>arch-id-model</h1>
+<h3>CLI program for training the data model used by https://ArchitectureID.ai</h3>
+</div>
 
-### Close a running tensorboard process
+# Quick Start
 
-`kill $(ps -e | grep 'tensorboard' | awk '{print $1}')`
+The recommended method for running the program is in a container built from the included `./Dockerfile` using [non-root (optional)](https://docs.docker.com/engine/security/rootless/) docker with [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) for GPU support. The included run script `./run.sh` will call the necessary docker commands to build the container and run the program in it.
 
-### Tensorflow logging levels
+The run script `./run.sh` accepts the following environment variables:
 
-See: https://stackoverflow.com/a/40982782
+- `DATASET_DIR` (required)\
+  dataset root directory with structure: root_dir/category_dir/image_files. replaces `--dataset-dir` CLI arg.
+- `OUTPUT_DIR` (required)\
+  directory for all program output. can be reused for multiple sessions. a new sub-directory will be created for each session. replaces `--output-dir` cli arg.
+- `CUDA_VISIBLE_DEVICES` (optional)\
+  a comma-separated list of integers reflecting the Bus ID of the GPUs to expose to the container with [NVIDIA Container Toolkit](<(https://github.com/NVIDIA/nvidia-docker)>). defaults to 0.
+- `TF_CPP_MIN_LOG_LEVEL` (optional)\
+  set C++ tensorflow log level. accepts one of 0,1,2,3. defaults to 2.
+- `TF_ENABLE_AUTO_MIXED_PRECISION` (optional)\
+  boolean to enable mixed precision. defaults to 1.
 
-Control tensorflow logging output with environment variables:
+\*Notice the run script accepts environment variables `DATASET_DIR` and `OUTPUT_DIR` in place of CLI args `--dataset-dir` and `--output-dir`. All other CLI options can be passed to the script as they would if calling the program directly from your shell.
 
-- `TF_CPP_MIN_LOG_LEVEL` = C++ logs
-- `AUTOGRAPH_VERBOSITY` = tf.autograth output
+For example, to train on a GPU with Bus ID #2 with a minimum accuracy of 0.7 for a maximum of 200 epochs, with dataset directory `~/dataset` and output directory `~/output`:
 
-Levels:
+```sh
+CUDA_VISIBLE_DEVICES=2 DATASET_DIR=~/dataset OUTPUT_DIR=~/output ./run.sh train --min-accuracy=.7 --max-epochs=1000
+```
 
-- 0 = all messages are logged (default behavior)
-- 1 = `INFO` messages are not printed
-- 2 = `INFO` and `WARNING` messages are not printed
-- 3 = `INFO`, `WARNING`, and `ERROR` messages are not printed
+For CLI help:
+
+```sh
+DATASET_DIR=~/dataset OUTPUT_DIR=~/output ./run.sh train -h
+```
