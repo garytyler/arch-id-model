@@ -12,15 +12,15 @@ The recommended method for running the program is in a container built from the 
 
 The run script `./run.sh` accepts the following environment variables:
 
-- `DATASET_DIR` (required)\
+- `DATASET_DIR` (required):\
   dataset root directory with structure: root_dir/category_dir/image_files. replaces `--dataset-dir` CLI arg.
-- `OUTPUT_DIR` (required)\
+- `OUTPUT_DIR` (required):\
   directory for all program output. can be reused for multiple sessions. a new sub-directory will be created for each session. replaces `--output-dir` cli arg.
-- `CUDA_VISIBLE_DEVICES` (optional)\
+- `CUDA_VISIBLE_DEVICES` (optional):\
   a comma-separated list of integers reflecting the Bus ID of the GPUs to expose to the container with [NVIDIA Container Toolkit](<(https://github.com/NVIDIA/nvidia-docker)>). defaults to 0.
-- `TF_CPP_MIN_LOG_LEVEL` (optional)\
+- `TF_CPP_MIN_LOG_LEVEL` (optional):\
   set C++ tensorflow log level. accepts one of 0,1,2,3. defaults to 2.
-- `TF_ENABLE_AUTO_MIXED_PRECISION` (optional)\
+- `TF_ENABLE_AUTO_MIXED_PRECISION` (optional):\
   boolean to enable mixed precision. defaults to 1.
 
 \*Notice the run script accepts environment variables `DATASET_DIR` and `OUTPUT_DIR` in place of CLI args `--dataset-dir` and `--output-dir`. All other CLI options can be passed to the script as they would if calling the program directly from your shell.
